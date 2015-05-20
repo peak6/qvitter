@@ -434,7 +434,7 @@ function changeDesign(obj) {
 			}				
 
 	  	// background image
-	  	if(obj.background_image.length > 0) {
+	  	if(typeof obj.background_image != 'undefined' && obj.background_image.length > 0) {
 		  	$('body').css('background-image','url(\'' + obj.background_image + '\')');
 	  		}
 	  	else {
@@ -481,7 +481,6 @@ function changeDesign(obj) {
 	  	
 	// remember the design for this stream
 	window.oldStreamsDesigns[window.currentStream] = {backgroundcolor:obj.backgroundcolor, linkcolor:obj.linkcolor, background_image:obj.background_image};		  	
-	console.log(window.oldStreamsDesigns[window.currentStream]);
 	}
 
 // create object to remember designs on page load
