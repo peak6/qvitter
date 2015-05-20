@@ -136,7 +136,9 @@ button.shorten i,
     width: 32px;
     z-index: 100;
 	display:none;
-	}	
+	}
+
+
 #top-compose:before {
 	cursor: pointer;
 	display: block;
@@ -4373,7 +4375,7 @@ body.rtl #feed-header-inner h2  {
 		border: 0 none;
 		border-radius: 0;
 		box-shadow: none;
-		color: #444444;
+		color: transparent; /* #4444444; */
 		display: block;
 		font-family: "Helvetica Neue",Arial,sans-serif;
 		font-size: 12px;
@@ -4724,9 +4726,11 @@ body.rtl #feed-header-inner h2  {
 	.stream-selection.current:after {
 		background-color:transparent;
 		}									
+	/*
 	#feed-header {
 	    display: none;
-		}	
+		}
+	*/	
 	.profile-card {
 		width:100%;
 		border:0 none;
