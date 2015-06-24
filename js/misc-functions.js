@@ -1395,20 +1395,6 @@ function shortenUrlsInBox(shortenButton) {
                 });
 }
 
-<<<<<<< HEAD
-=======
-			if(typeof data.shorturl != 'undefined') {
-				
-				shortenButton.closest('.queet-toolbar').siblings('.upload-image-container').children('img[data-shorturl="' + data.url.url + '"]').attr('data-shorturl',data.shorturl);
-				shortenButton.parent().parent().siblings('.queet-box-syntax').html(shortenButton.parent().parent().siblings('.queet-box-syntax').html().replace($('<div/>').text(data.url.url).html(), data.shorturl));
-				shortenButton.parent().parent().siblings('.queet-box-syntax').trigger('keyup');
-				shortenButton.addClass('disabled'); // make sure the button is disabled right after
-				}
-			remove_spinner();
-			}});
-		});
-}
-
 /* · 
    ·     
    ·   Return the user screen name that this stream belongs to. last resort just return the stream
@@ -1440,4 +1426,4 @@ function theUserOrGroupThisStreamBelongsTo(stream) {
 		}
 	}
 	
->>>>>>> e3da8af8e2fb824d357ade136ecb1e31b307201c
+
