@@ -1,38 +1,43 @@
 
- /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                             Q V I T T E R                                   ·
-  ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                                 <o)                                         ·
-  ·                                  /_////                                     ·
-  ·                                 (____/                                      ·
-  ·                                          (o<                                ·
-  ·                                   o> \\\\_\                                 ·
-  ·                                 \\)   \____)                                ·
-  ·                                                                             ·
-  ·                                                                             ·    
-  ·                                                                             ·
-  ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
-  ·  under the  terms of the GNU Affero General Public License as published by  ·
-  ·  the Free Software Foundation,  either version three of the License or (at  ·
-  ·  your option) any later version.                                            ·
-  ·                                                                             ·
-  ·  Qvitter is distributed  in hope that  it will be  useful but  WITHOUT ANY  ·
-  ·  WARRANTY;  without even the implied warranty of MERCHANTABILTY or FITNESS  ·
-  ·  FOR A PARTICULAR PURPOSE.  See the  GNU Affero General Public License for  ·
-  ·  more details.                                                              ·
-  ·                                                                             ·
-  ·  You should have received a copy of the  GNU Affero General Public License  ·
-  ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
-  ·                                                                             ·
-  ·   Contact h@nnesmannerhe.im if you have any questions.                      ·
-  ·                                                                             · 
-  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
-
+/*· · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
+  ·                                                                               ·
+  ·                                                                               ·
+  ·                             Q V I T T E R                                     ·
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·                                 <o)                                           ·
+  ·                                  /_////                                       ·
+  ·                                 (____/                                        ·
+  ·                                          (o<                                  ·
+  ·                                   o> \\\\_\                                   ·
+  ·                                 \\)   \____)                                  ·  
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·     @licstart  The following is the entire license notice for the             ·
+  ·     JavaScript code in this page.                                             ·
+  ·                                                                               ·
+  ·     Copyright (C) 2015  Hannes Mannerheim and other contributors              ·
+  ·                                                                               ·    
+  ·                                                                               ·
+  ·     This program is free software: you can redistribute it and/or modify      ·
+  ·     it under the terms of the GNU Affero General Public License as            ·
+  ·     published by the Free Software Foundation, either version 3 of the        ·
+  ·     License, or (at your option) any later version.                           ·
+  ·                                                                               ·
+  ·     This program is distributed in the hope that it will be useful,           ·
+  ·     but WITHOUT ANY WARRANTY; without even the implied warranty of            ·
+  ·     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             ·
+  ·     GNU Affero General Public License for more details.                       ·
+  ·                                                                               ·
+  ·     You should have received a copy of the GNU Affero General Public License  ·
+  ·     along with this program.  If not, see <http://www.gnu.org/licenses/>.     ·
+  ·                                                                               ·
+  ·     @licend  The above is the entire license notice                           · 
+  ·     for the JavaScript code in this page.                                     · 
+  ·                                                                               · 
+  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
+  
+  
 /* · 
    · 
    ·   Current time in milliseconds, to send with each request to make sure 
@@ -99,7 +104,7 @@ function checkLogin(username,password,actionOnSuccess) {
 			password: password
 			},	 	
 	 	dataType: 'json', 
-	 	error: function() {
+	 	error: function() {
 	 		logoutWithoutReload(true);
 	 		},
  		success: function(data) { 					
@@ -112,7 +117,7 @@ function checkLogin(username,password,actionOnSuccess) {
 			}
 		});				
 	}
-
+	
 
 /* · 
    · 
@@ -140,11 +145,28 @@ function getFromAPI(stream, actionOnSuccess) {
 			},
 		success: function(data, textStatus, request) { 
 
-			displayOrHideUnreadNotifications(request.getResponseHeader('Qvitter-Notifications'));
+			displayOrHideUnreadNotifications(request.getResponseHeader('Qvitter-Notifications'));			
+			
+			// profile card from user array, also cache it
+			if(request.getResponseHeader('Qvitter-User-Array') !== null) {
+				var qvitterUserArrayHeader = request.getResponseHeader('Qvitter-User-Array');
+				
+				// quitter.se fix
+				if(window.thisSiteThinksItIsHttpButIsActuallyHttps) {
+				console.log(qvitterUserArrayHeader);
+					qvitterUserArrayHeader = qvitterUserArrayHeader.replace(new RegExp('http:\\\\/\\\\/' + window.siteRootDomain, 'g'), 'https:\/\/' + window.siteRootDomain);
+					}
+			
+				var userArray = iterateRecursiveReplaceHtmlSpecialChars($.parseJSON(qvitterUserArrayHeader));
+				userArrayCacheStore(userArray);
+				addProfileCardToDOM(buildProfileCard(userArray));
+				}
 			
 			data = convertEmptyObjectToEmptyArray(data);		
 
 			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			
+			searchForUserDataToCache(data);
 
 			actionOnSuccess(data);				
 			},
@@ -199,9 +221,9 @@ function postNewBackgroundColor(newBackgroundColor) {
 		dataType:"json",
 		error: function(data){ console.log(data); },
 		success: function(data) { 
-			window.userBackgroundColor = newBackgroundColor;
-	  		$('body').css('background-image','url(""'); // unset background image			
-			window.userBackgroundImage = '';	  		
+			// unset background image and set new color
+			window.loggedIn.background_image = false;
+			changeDesign({backgroundimage:false,backgroundcolor:newBackgroundColor});
 			}
 		});	
 	}
@@ -375,19 +397,16 @@ function getFavsAndRequeetsForQueet(q,qid) {
 		type: "GET", 
 		dataType: 'json', 
 		success: function(data) { 
+
 			if(data.favs.length > 0 || data.repeats.length > 0) {
-
 				localStorageObjectCache_STORE('favsAndRequeets',qid, data); // cache response
-
-				if(q.hasClass('expanded') && !q.hasClass('collapsing')) {
-					showFavsAndRequeetsInQueet(q,data);
-					}						
 				}
 			else {
 				// remove from cache and DOM if all favs and repeats are deleted
 				localStorageObjectCache_STORE('favsAndRequeets',qid, false);
-				q.children('.queet').find('.stats').remove();
 				}
+
+			showFavsAndRequeetsInQueet(q,data);				
 			}, 
 		error: function(data) { 
 			remove_spinner();
@@ -395,4 +414,3 @@ function getFavsAndRequeetsForQueet(q,qid) {
 			}
 		});  
 	}
-showFavsAndRequeetsInQueet

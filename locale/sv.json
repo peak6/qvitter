@@ -1,4 +1,5 @@
 {
+	"directionality":"ltr",
 	"languageName": "Svenska",
 	"loginUsername": "Användarnamn eller mejladress",
 	"loginPassword": "Lösenord",
@@ -118,5 +119,6 @@
 	"showTerms": "Läs våra användarvillkor",
 	"ellipsisMore": "Mer",
 	"blockUser": "Blockera {username}",
-	"goToOriginalNotice": "Gå till den ursprungliga queeten" 
+	"goToOriginalNotice": "Gå till den ursprungliga queeten",
+	"clickToDrag":"Klicka och dra för att flytta" 
 }
