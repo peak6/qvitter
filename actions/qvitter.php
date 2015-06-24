@@ -168,7 +168,32 @@ class QvitterAction extends ApiAction
 				
 				
 				
-				?><script>
+				?>
+				<script>
+				
+					/*    
+					@licstart  The following is the entire license notice for the 
+					JavaScript code in this page.
+
+					Copyright (C) 2015  Hannes Mannerheim and other contributors
+
+					This program is free software: you can redistribute it and/or modify
+					it under the terms of the GNU Affero General Public License as
+					published by the Free Software Foundation, either version 3 of the
+					License, or (at your option) any later version.
+
+					This program is distributed in the hope that it will be useful,
+					but WITHOUT ANY WARRANTY; without even the implied warranty of
+					MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+					GNU Affero General Public License for more details.
+
+					You should have received a copy of the GNU Affero General Public License
+					along with this program.  If not, see <http://www.gnu.org/licenses/>.  
+
+					@licend  The above is the entire license notice
+					for the JavaScript code in this page.
+					*/
+						
 					window.defaultAvatarStreamSize = <?php print json_encode(Avatar::defaultImage(AVATAR_STREAM_SIZE)) ?>;
 					window.textLimit = <?php print json_encode((int)common_config('site','textlimit')) ?>;
 					window.registrationsClosed = <?php print json_encode($registrationsclosed) ?>;
@@ -200,7 +225,8 @@ class QvitterAction extends ApiAction
 					window.defaultLinkColor = '<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>';
 					window.defaultBackgroundColor = '<?php print QvitterPlugin::settings("defaultbackgroundcolor"); ?>';
 					window.siteBackground = '<?php print QvitterPlugin::settings("sitebackground"); ?>';
-					window.enableWelcomeText = '<?php print QvitterPlugin::settings("enablewelcometext"); ?>';
+					window.enableWelcomeText = <?php print json_encode(QvitterPlugin::settings("enablewelcometext")); ?>;
+					window.customWelcomeText = <?php print json_encode(QvitterPlugin::settings("customwelcometext")); ?>;
 					window.urlShortenerAPIURL = '<?php print QvitterPlugin::settings("urlshortenerapiurl"); ?>';					
 					window.urlShortenerSignature = '<?php print QvitterPlugin::settings("urlshortenersignature"); ?>';
 					window.commonSessionToken = '<?php print common_session_token(); ?>';
@@ -209,100 +235,54 @@ class QvitterAction extends ApiAction
 					window.siteEmail = '<?php print common_config('site', 'email'); ?>';										
 					window.siteLicenseTitle = '<?php print common_config('license', 'title'); ?>';
 					window.siteLicenseURL = '<?php print common_config('license', 'url'); ?>';
-					window.customTermsOfUse = <?php print json_encode(QvitterPlugin::settings("customtermsofuse")); ?>;	
+					window.customTermsOfUse = <?php print json_encode(QvitterPlugin::settings("customtermsofuse")); ?>;
 					
 					// available language files and their last update time
 					window.availableLanguages = {<?php
 					
 					// scan all files in the locale directory and create a json object with their change date added
 					$available_languages = array_diff(scandir(QVITTERDIR.'/locale'), array('..', '.'));
-					foreach($available_languages as $lan) {
+					foreach($available_languages as $lankey=>$lan) {
+
 						$lancode = substr($lan,0,strpos($lan,'.'));
-						print "\n".'						"'.$lancode.'": "'.$lan.'?changed='.date('YmdHis',filemtime(QVITTERDIR.'/locale/'.$lan)).'",';
 						
+						// for the paranthesis containing language region to work with rtl in ltr enviroment and vice versa, we add a
+						// special rtl or ltr html char after the paranthesis
+						// this list is incomplete, but if any rtl language gets a regional translation, it will probably be arabic
+						$rtl_or_ltr_special_char = '&lrm;';
+						$base_lancode = substr($lancode,0,strpos($lancode,'_'));
+						if($base_lancode == 'ar'
+						|| $base_lancode == 'fa'												
+						|| $base_lancode == 'he') {
+							$rtl_or_ltr_special_char = '&rlm;';							
+							}
+									
 						// also make an array with all language names, to use for generating menu
 						$languagecodesandnames[$lancode]['english_name'] = Locale::getDisplayLanguage($lancode, 'en');
 						$languagecodesandnames[$lancode]['name'] = Locale::getDisplayLanguage($lancode, $lancode);
 						if(Locale::getDisplayRegion($lancode, $lancode)) {
-							$languagecodesandnames[$lancode]['name'] .= ' ('.Locale::getDisplayRegion($lancode, $lancode).')';							
+							$languagecodesandnames[$lancode]['name'] .= ' ('.Locale::getDisplayRegion($lancode, $lancode).')'.$rtl_or_ltr_special_char;							
 							}
-						if($lancode == 'es_ahorita') { $languagecodesandnames[$lancode]['name'] = 'español (ahorita)'; } // joke
+						
+						// ahorita meme only on quitter.es
+						if($lancode == 'es_ahorita') {
+							if($siterootdomain == 'quitter.es') {
+								$languagecodesandnames[$lancode]['name'] = 'español (ahorita)'; 
+								}
+							else {
+								unset($available_languages[$lankey]);
+								unset($languagecodesandnames[$lancode]);
+								continue;
+								}
+							}
+
+						print "\n".'						"'.$lancode.'": "'.$lan.'?changed='.date('YmdHis',filemtime(QVITTERDIR.'/locale/'.$lan)).'",';
 						}				
 						?>
 					
 						};
 					
 				</script>
-				<style>
-					a, a:visited, a:active,
-					ul.stats li:hover a,
-					ul.stats li:hover a strong,
-					#user-body a:hover div strong,
-					#user-body a:hover div div,
-					.permalink-link:hover,
-					.stream-item.expanded > .queet .stream-item-expand,
-					.stream-item-footer .with-icn .requeet-text a b:hover,
-					.queet-text span.attachment.more,
-					.stream-item-header .created-at a:hover,
-					.stream-item-header a.account-group:hover .name,
-					.queet:hover .stream-item-expand,
-					.show-full-conversation:hover,
-					#new-queets-bar,
-					.menu-container div,	
-					.cm-mention, .cm-tag, .cm-group, .cm-url, .cm-email,
-					div.syntax-middle span,
-					#user-body strong,
-					ul.stats,
-					.stream-item:not(.temp-post) ul.queet-actions li .icon:not(.is-mine):hover:before,
-					.show-full-conversation,
-					#user-body #user-queets:hover .label,
-					#user-body #user-groups:hover .label, 
-					#user-body #user-following:hover .label,
-					ul.stats a strong,
-					.queet-box-extras button,
-					#openid-login:hover:after {
-						color:<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>;/*COLOREND*/
-						}			
-					#unseen-notifications,
-					.stream-item.notification .not-seen,
-					#top-compose,
-					#logo,
-					.queet-toolbar button,
-					#user-header,
-					.profile-header-inner,
-					.topbar,
-					.menu-container,
-					.member-button.member,
-					.external-follow-button.following,
-					.qvitter-follow-button.following,
-					.save-profile-button,
-					.crop-and-save-button,
-					.topbar .global-nav.show-logo:before,
-					.topbar .global-nav.pulse-logo:before {
-						background-color:<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>;/*BACKGROUNDCOLOREND*/
-						}	
-					.queet-box-syntax[contenteditable="true"]:focus {
-						border-color:#999999;/*BORDERCOLOREND*/						
-						}
-					#user-footer-inner,
-					.inline-reply-queetbox,
-					#popup-faq #faq-container p.indent {
-						background-color:rgb(205,230,239);/*LIGHTERBACKGROUNDCOLOREND*/
-						}
-					#user-footer-inner,
-					.queet-box,
-					.queet-box-syntax[contenteditable="true"],
-					.inline-reply-queetbox,
-					span.inline-reply-caret,
-				    .stream-item.expanded .stream-item.first-visible-after-parent,
-					#popup-faq #faq-container p.indent {
-						border-color:rgb(155,206,224);/*LIGHTERBORDERCOLOREND*/
-						}
-					span.inline-reply-caret .caret-inner {
-						border-bottom-color:rgb(205,230,239);/*LIGHTERBORDERBOTTOMCOLOREND*/
-						}
-						
-				</style>
 				<?php
 				
 	            // event for other plugins to use to add head elements to qvitter
@@ -391,8 +371,6 @@ class QvitterAction extends ApiAction
 						}														
 					
 					?><div class="front-welcome-text <?php if ($registrationsclosed) { print 'registrations-closed'; } ?>">
-						<h1></h1>
-						<p></p>
 					</div>		
 					<div id="user-container" style="display:none;">		
 						<div id="login-content">
@@ -488,16 +466,16 @@ class QvitterAction extends ApiAction
 			
 					<div id="footer"><div id="footer-spinner-container"></div></div>
 				</div>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-2.1.3.min.js"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-ui-1.10.3.min.js"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery.minicolors.min.js"></script>	    	    
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery.jWindowCrop.js"></script>	
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/load-image.min.js"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/xregexp-all-min-2.0.0.js"></script>				
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/dom-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/dom-functions.js')); ?>"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/misc-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/misc-functions.js')); ?>"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/ajax-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/ajax-functions.js')); ?>"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/qvitter.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/qvitter.js')); ?>"></script>
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-2.1.4.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery-2.1.4.min.js')); ?>"></script>
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-ui-1.10.3.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery-ui-1.10.3.min.js')); ?>"></script>
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery.minicolors.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery.minicolors.min.js')); ?>"></script>	    	    
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery.jWindowCrop.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery.jWindowCrop.js')); ?>"></script>	
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/load-image.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/load-image.min.js')); ?>"></script>
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/xregexp-all-min-2.0.0.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/xregexp-all-min-2.0.0.js')); ?>"></script>				
+				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/dom-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/dom-functions.js')); ?>"></script>
+				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/misc-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/misc-functions.js')); ?>"></script>
+				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/ajax-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/ajax-functions.js')); ?>"></script>
+				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/qvitter.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/qvitter.js')); ?>"></script>
 				<?php
 				
 					// event for other plugins to add scripts to qvitter
@@ -508,7 +486,114 @@ class QvitterAction extends ApiAction
 						print '<script type="text/javascript">'.QvitterPlugin::settings('js').'</script>';
 					}				
 				
-				?>	
+				?>
+			<div id="dynamic-styles">
+				<style>
+					a, a:visited, a:active,
+					ul.stats li:hover a,
+					ul.stats li:hover a strong,
+					#user-body a:hover div strong,
+					#user-body a:hover div div,
+					.permalink-link:hover,
+					.stream-item.expanded > .queet .stream-item-expand,
+					.stream-item-footer .with-icn .requeet-text a b:hover,
+					.queet-text span.attachment.more,
+					.stream-item-header .created-at a:hover,
+					.stream-item-header a.account-group:hover .name,
+					.queet:hover .stream-item-expand,
+					.show-full-conversation:hover,
+					#new-queets-bar,
+					.menu-container div,	
+					.cm-mention, .cm-tag, .cm-group, .cm-url, .cm-email,
+					div.syntax-middle span,
+					#user-body strong,
+					ul.stats,
+					.stream-item:not(.temp-post) ul.queet-actions li .icon:not(.is-mine):hover:before,
+					.show-full-conversation,
+					#user-body #user-queets:hover .label,
+					#user-body #user-groups:hover .label, 
+					#user-body #user-following:hover .label,
+					ul.stats a strong,
+					.queet-box-extras button,
+					#openid-login:hover:after {
+						color:/*COLORSTART*/<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>/*COLOREND*/;
+						}			
+					#unseen-notifications,
+					.stream-item.notification .not-seen,
+					#top-compose,
+					#logo,
+					.queet-toolbar button,
+					#user-header,
+					.profile-header-inner,
+					.topbar,
+					.menu-container,
+					.member-button.member,
+					.external-follow-button.following,
+					.qvitter-follow-button.following,
+					.save-profile-button,
+					.crop-and-save-button,
+					.topbar .global-nav.show-logo:before,
+					.topbar .global-nav.pulse-logo:before {
+						background-color:/*BACKGROUNDCOLORSTART*/<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>/*BACKGROUNDCOLOREND*/;
+						}	
+					.queet-box-syntax[contenteditable="true"]:focus {
+						border-color:/*BORDERCOLORSTART*/#999999/*BORDERCOLOREND*/;
+						}
+					#user-footer-inner,
+					.inline-reply-queetbox,
+					#popup-faq #faq-container p.indent {
+						background-color:/*LIGHTERBACKGROUNDCOLORSTART*/rgb(205,230,239)/*LIGHTERBACKGROUNDCOLOREND*/;
+						}
+					#user-footer-inner,
+					.queet-box,
+					.queet-box-syntax[contenteditable="true"],
+					.inline-reply-queetbox,
+					span.inline-reply-caret,
+				    .stream-item.expanded .stream-item.first-visible-after-parent,
+					#popup-faq #faq-container p.indent {
+						border-color:/*LIGHTERBORDERCOLORSTART*/rgb(155,206,224)/*LIGHTERBORDERCOLOREND*/;
+						}
+					span.inline-reply-caret .caret-inner {
+						border-bottom-color:/*LIGHTERBORDERBOTTOMCOLORSTART*/rgb(205,230,239)/*LIGHTERBORDERBOTTOMCOLOREND*/;
+						}
+						
+					.modal-close .icon,
+					.chev-right,
+					.close-right,
+					button.icon.nav-search,
+					.member-button .join-text i,
+					.external-member-button .join-text i,
+					.external-follow-button .follow-text i,
+					.qvitter-follow-button .follow-text i,
+					#logo,
+					.upload-cover-photo,
+					.upload-avatar,
+					.upload-background-image,
+					button.shorten i,
+					.reload-stream,
+					.topbar .global-nav:before,
+					.stream-item.notification.repeat .dogear, 
+					.stream-item.notification.like .dogear,
+					.ostatus-link,
+					.close-edit-profile-window {
+						background-image: url("<?php print QvitterPlugin::settings("sprite"); ?>");	
+						background-size: 500px 1329px;						
+						}
+					@media (max-width: 910px) {	
+						#search-query,
+						.menu-container a,
+						.menu-container a.current,
+						.stream-selection.friends-timeline:after,
+						.stream-selection.notifications:after,
+						.stream-selection.my-timeline:after,	
+						.stream-selection.public-timeline:after {	
+							background-image: url("<?php print QvitterPlugin::settings("sprite"); ?>");	
+							background-size: 500px 1329px;
+							}												
+						}
+												
+				</style>
+			</div>
 			</body>
 		</html>
 

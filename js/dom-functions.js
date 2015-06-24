@@ -1,37 +1,41 @@
 
- /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                             Q V I T T E R                                   ·
-  ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                                 <o)                                         ·
-  ·                                  /_////                                     ·
-  ·                                 (____/                                      ·
-  ·                                          (o<                                ·
-  ·                                   o> \\\\_\                                 ·
-  ·                                 \\)   \____)                                ·
-  ·                                                                             ·
-  ·                                                                             ·    
-  ·                                                                             ·
-  ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
-  ·  under the  terms of the GNU Affero General Public License as published by  ·
-  ·  the Free Software Foundation,  either version three of the License or (at  ·
-  ·  your option) any later version.                                            ·
-  ·                                                                             ·
-  ·  Qvitter is distributed  in hope that  it will be  useful but  WITHOUT ANY  ·
-  ·  WARRANTY;  without even the implied warranty of MERCHANTABILTY or FITNESS  ·
-  ·  FOR A PARTICULAR PURPOSE.  See the  GNU Affero General Public License for  ·
-  ·  more details.                                                              ·
-  ·                                                                             ·
-  ·  You should have received a copy of the  GNU Affero General Public License  ·
-  ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
-  ·                                                                             ·
-  ·  Contact h@nnesmannerhe.im if you have any questions.                       ·
-  ·                                                                             · 
-  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
+/*· · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
+  ·                                                                               ·
+  ·                                                                               ·
+  ·                             Q V I T T E R                                     ·
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·                                 <o)                                           ·
+  ·                                  /_////                                       ·
+  ·                                 (____/                                        ·
+  ·                                          (o<                                  ·
+  ·                                   o> \\\\_\                                   ·
+  ·                                 \\)   \____)                                  ·  
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·     @licstart  The following is the entire license notice for the             ·
+  ·     JavaScript code in this page.                                             ·
+  ·                                                                               ·
+  ·     Copyright (C) 2015  Hannes Mannerheim and other contributors              ·
+  ·                                                                               ·    
+  ·                                                                               ·
+  ·     This program is free software: you can redistribute it and/or modify      ·
+  ·     it under the terms of the GNU Affero General Public License as            ·
+  ·     published by the Free Software Foundation, either version 3 of the        ·
+  ·     License, or (at your option) any later version.                           ·
+  ·                                                                               ·
+  ·     This program is distributed in the hope that it will be useful,           ·
+  ·     but WITHOUT ANY WARRANTY; without even the implied warranty of            ·
+  ·     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             ·
+  ·     GNU Affero General Public License for more details.                       ·
+  ·                                                                               ·
+  ·     You should have received a copy of the GNU Affero General Public License  ·
+  ·     along with this program.  If not, see <http://www.gnu.org/licenses/>.     ·
+  ·                                                                               ·
+  ·     @licend  The above is the entire license notice                           · 
+  ·     for the JavaScript code in this page.                                     · 
+  ·                                                                               · 
+  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
 
 /* ·  
@@ -45,14 +49,31 @@
    	
 function showFavsAndRequeetsInQueet(q,data) {
 
+	// set the non-expanded fav- and rq-count
+	q.children('.queet').find('.action-fav-num').html(data.favs.length);
+	q.children('.queet').find('.action-fav-num').attr('data-fav-num',data.favs.length);	
+	q.children('.queet').find('.action-rq-num').html(data.repeats.length);
+	q.children('.queet').find('.action-rq-num').attr('data-rq-num',data.repeats.length);		
+
+	// don't proceed if queet is not expanded
+	if(!q.hasClass('expanded') || q.hasClass('collapsing')) {
+		return;
+		}
+	
+	// don't proceed and remove expanded stats if all favs and repeats are removed 
+	if(data.favs.length < 1 && data.repeats.length < 1) {
+		q.children('.queet').find('.stats').remove();
+		return;
+		}			
+
 	// remove any existing stats container and add a new empty one
 	if(q.children('.queet').find('ul.stats').length > 0) {
 		q.children('.queet').find('ul.stats').remove();
 		}
 		
 	q.children('.queet').find('.queet-stats-container').prepend('<ul class="stats"><li class="avatar-row"></li></ul>');					
-	
-	// add favs
+
+	// set the expanded fav-count number			
 	if(data.favs.length > 0) {
 		
 		if(data.favs.length == 1) {
@@ -61,13 +82,13 @@ function showFavsAndRequeetsInQueet(q,data) {
 		else if(data.favs.length > 1) {
 			var favLabel = window.sL.favoritesNoun;
 			}
-			
+
 		if(q.children('.queet').find('.fav-count').length>0) {
 			q.children('.queet').find('.fav-count').children('strong').html(data.favs.length);
 			}			
 		else {
 			q.children('.queet').find('li.avatar-row').before('<li class="fav-count"><a>' + favLabel + ' </a><strong>' + data.favs.length + '</strong></li>');						
-			}
+			}	
 		}
 		
 	// add repeats
@@ -124,6 +145,268 @@ function showFavsAndRequeetsInQueet(q,data) {
 
 	}
 	
+
+/* ·  
+   · 
+   ·   Build profile card HTML
+   · 
+   ·   @param data: an object with a user array
+   · 
+   · · · · · · · · · */
+   
+function buildProfileCard(data) {
+
+	data = cleanUpUserObject(data);
+	
+	// use avatar if no cover photo
+	var coverPhotoHtml = '';
+	if(data.cover_photo !== false) {
+		coverPhotoHtml = 'background-image:url(\'' + data.cover_photo + '\')';
+		}				
+
+	// follows me?
+	var follows_you = '';
+	if(data.follows_you === true  && window.myUserID != data.id) {
+		var follows_you = '<span class="follows-you">' + window.sL.followsYou + '</span>';			
+		}
+
+	// show user actions if logged in
+	var followingClass = '';
+	if(data.following) {
+		followingClass = 'following';
+		}			
+	var followButton = '';
+	if(typeof window.loggedIn.screen_name != 'undefined' && window.myUserID != data.id) {			
+		var followButton = '<div class="user-actions"><button data-follow-user-id="' + data.id + '" data-follow-user="' + data.statusnet_profile_url + '" type="button" class="qvitter-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userFollow + '</span><span class="button-text following-text">' + window.sL.userFollowing + '</span><span class="button-text unfollow-text">' + window.sL.userUnfollow + '</span></button></div>';	
+		}
+		
+	// follow from external instance if logged out
+	if(typeof window.loggedIn.screen_name == 'undefined') {			
+		var followButton = '<div class="user-actions"><button type="button" class="external-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userExternalFollow + '</span></button></div>';	
+		}
+
+	// edit profile button if me
+	if(typeof window.loggedIn.screen_name != 'undefined' && window.myUserID == data.id) {			
+		var followButton = '<div class="user-actions"><button type="button" class="edit-profile-button"><span class="button-text edit-profile-text">' + window.sL.editMyProfile + '</span></button></div>';	
+		}						
+	
+	// is webpage empty?
+	var emptyWebpage = '';
+	if(data.url.length<1) {
+		emptyWebpage = ' empty';				
+		}
+	
+	// full card html
+	data.profileCardHtml = '\
+		<div class="profile-card">\
+			<div class="profile-header-inner" style="' + coverPhotoHtml + '">\
+				<div class="profile-header-inner-overlay"></div>\
+				<a class="profile-picture" href="' + data.profile_image_url_original + '">\
+					<img src="' + data.profile_image_url_profile_size + '" />\
+				</a>\
+				<div class="profile-card-inner">\
+					<h1 class="fullname">' + data.name + '<span></span></h1>\
+					<h2 class="username">\
+						<span class="screen-name">@' + data.screen_name + '</span>\
+						' + follows_you + '\
+					</h2>\
+					<div class="bio-container"><p>' + data.description + '</p></div>\
+					<p class="location-and-url">\
+						<span class="location">' + data.location + '</span>\
+						<span class="url' + emptyWebpage + '">\
+							<span class="divider"> · </span>\
+							<a href="' + data.url + '">' + data.url.replace('http://','').replace('https://','') + '</a>\
+						</span>\
+					</p>\
+				</div>\
+			</div>\
+			<div class="profile-banner-footer">\
+				<ul class="stats">\
+					<li><a class="tweet-stats">' + window.sL.notices + '<strong>' + data.statuses_count + '</strong></a></li>\
+					<li><a class="following-stats">' + window.sL.following + '<strong>' + data.friends_count + '</strong></a></li>\
+					<li><a class="follower-stats">' + window.sL.followers + '<strong>' + data.followers_count + '</strong></a></li>\
+					<li><a class="groups-stats">' + window.sL.groups + '<strong>' + data.groups_count + '</strong></a></li>\
+				</ul>\
+				' + followButton + '\
+				<div class="clearfix"></div>\
+			</div>\
+		</div>\
+		';
+
+	return data;
+	}
+
+
+/* ·  
+   · 
+   ·   Build external profile card HTML
+   · 
+   ·   @param data: an object containing data.external user array, 
+   ·   				and maybe (hopefully) also a data.local user array
+   · 
+   · · · · · · · · · */
+   
+function buildExternalProfileCard(data) {
+
+	// local profile id and follow class
+	var followLocalIdHtml = '';
+	var followingClass = '';					
+	if(typeof data.local != 'undefined' && data.local !== null) {
+		followLocalIdHtml = ' data-follow-user-id="' + data.local.id + '"';
+
+		if(data.local.following) {
+			followingClass = 'following';
+			}
+		}
+	
+	// follows me?
+	var follows_you = '';
+	if(data.local !== null && data.local.follows_you === true  && window.myUserID != data.local.id) {
+		var follows_you = '<span class="follows-you">' + window.sL.followsYou + '</span>';			
+		}						
+					
+	// empty strings and zeros instead of null
+	data = cleanUpUserObject(data.external);
+	
+	// old statusnet-versions might not have full avatar urls in their api response
+	if(typeof data.profile_image_url_original == 'undefined'
+		   || data.profile_image_url_original === null
+		   || data.profile_image_url_original.length == 0) {
+		data.profile_image_url_original = data.profile_image_url;													
+		}
+	if(typeof data.profile_image_url_profile_size == 'undefined'
+		   || data.profile_image_url_profile_size === null
+		   || data.profile_image_url_profile_size.length == 0) {
+		data.profile_image_url_profile_size = data.profile_image_url;													
+		}						
+	
+	// we might have a cover photo
+	if(typeof data.cover_photo != 'undefined' && data.cover_photo !== false) {
+		var cover_photo = data.cover_photo;
+		}
+	else {
+		var cover_photo = data.profile_image_url_original;						
+		}
+
+	// is webpage empty?
+	var emptyWebpage = '';
+	if(data.url.length<1) {
+		emptyWebpage = ' empty';				
+		}						
+	
+	var serverUrl = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.statusnet_profile_url, data.screen_name);
+	data.screenNameWithServer = '@' + data.screen_name + '@' + serverUrl;						
+	var followButton = '<div class="user-actions"><button' + followLocalIdHtml + ' data-follow-user="' + data.statusnet_profile_url + '" type="button" class="qvitter-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userFollow + '</span><span class="button-text following-text">' + window.sL.userFollowing + '</span><span class="button-text unfollow-text">' + window.sL.userUnfollow + '</span></button></div>';						
+
+	data.profileCard = '\
+		<div class="profile-card">\
+			<div class="profile-header-inner" style="background-image:url(\'' + cover_photo + '\')">\
+				<div class="profile-header-inner-overlay"></div>\
+				<a class="profile-picture"><img src="' + data.profile_image_url_profile_size + '" /></a>\
+				<div class="profile-card-inner">\
+					<h1 class="fullname">' + data.name + '<span></span></h1>\
+					<h2 class="username">\
+						<span class="screen-name">\
+							<a target="_blank" href="' + data.statusnet_profile_url + '">' + data.screenNameWithServer + '</a>\
+						</span>\
+						' + follows_you + '\
+					</h2>\
+					<div class="bio-container"><p>' + data.description + '</p></div>\
+					<p class="location-and-url">\
+						<span class="location">' + data.location + '</span>\
+						<span class="url' + emptyWebpage + '">\
+							<span class="divider"> · </span>\
+							<a target="_blank" href="' + data.url + '">' + data.url.replace('http://','').replace('https://','') + '</a>\
+						</span>\
+					</p>\
+				</div>\
+			</div>\
+			<div class="profile-banner-footer">\
+				<ul class="stats">\
+					<li><a target="_blank" href="' + data.statusnet_profile_url + '">' + window.sL.notices + '<strong>' + data.statuses_count + '</strong></a></li>\
+					<li><a target="_blank" href="' + data.statusnet_profile_url + '/subscriptions">' + window.sL.following + '<strong>' + data.friends_count + '</strong></a></li>\
+					<li><a target="_blank" href="' + data.statusnet_profile_url + '/subscribers">' + window.sL.followers + '<strong>' + data.followers_count + '</strong></a></li>\
+				</ul>\
+				' + followButton + '\
+				<div class="clearfix"></div>\
+			</div>\
+		</div>\
+		<div class="clearfix"></div>';		
+	
+	return data;
+	}
+
+	
+	
+	
+/* ·  
+   · 
+   ·   Adds a profile card before feed element
+   · 
+   ·   @param data: an object with a user array
+   · 
+   · · · · · · · · · */
+   
+function addProfileCardToDOM(data) {
+
+	
+	// change design
+	changeDesign({backgroundimage:data.background_image, backgroundcolor:data.backgroundcolor, linkcolor:data.linkcolor});
+
+	// remove any old profile card and show profile card
+	$('#feed').siblings('.profile-card').remove();
+	$('#feed').before(data.profileCardHtml);		
+	}
+	
+	
+/* ·  
+   · 
+   ·   Open external profile card in popup
+   · 
+   ·   @param data: an object with a user array
+   · 
+   · · · · · · · · · */
+   
+function openExternalProfileInPopup(data) {
+
+	var data = buildExternalProfileCard(data);
+	
+	// preview latest notice
+	var noticeHtml = '';
+	if(typeof data.status != 'undefined') {
+		data.status.user = data;
+		var $noticeHtmlObj = $('<div/>').append(buildQueetHtml(data.status));						
+		$noticeHtmlObj.find('.queet-thumbs').remove();
+		var noticeHtml = $noticeHtmlObj.outerHTML();			
+		}					
+	
+	popUpAction('popup-external-profile', data.screenNameWithServer,data.profileCard + noticeHtml,'<a class="go-to-external-profile" href="' + data.statusnet_profile_url + '">' + window.sL.goToExternalProfile + '</a>');
+	}	
+	
+	
+/* ·  
+   · 
+   ·   Open local profile card in popup
+   · 
+   ·   @param data: an object with a user array
+   · 
+   · · · · · · · · · */
+   
+function openLocalProfileInPopup(data) {
+
+	var data = buildProfileCard(data);
+	
+	// preview latest notice
+	var noticeHtml = '';
+	if(typeof data.status != 'undefined') {
+		data.status.user = data;
+		var $noticeHtmlObj = $('<div/>').append(buildQueetHtml(data.status));						
+		$noticeHtmlObj.find('.queet-thumbs').remove();
+		var noticeHtml = $noticeHtmlObj.outerHTML();
+		}					
+	
+	popUpAction('popup-local-profile', '@' + data.screen_name, data.profileCardHtml + '<div class="clearfix"></div>' + noticeHtml,'<a class="go-to-local-profile" href="' + data.statusnet_profile_url + '">' + window.sL.goToExternalProfile + '</a>');
+	}		
 	
 	
 /* ·  
@@ -135,7 +418,6 @@ function showFavsAndRequeetsInQueet(q,data) {
    · · · · · · · · · */
    	
 function profileCardFromFirstObject(data,screen_name) {
-	
 	var first = new Object();
 	for (var i in data) {
 	    if (data.hasOwnProperty(i) && typeof(i) !== 'function') {
@@ -143,110 +425,8 @@ function profileCardFromFirstObject(data,screen_name) {
 	        break;
 		    }
 		}
-	
 	if(typeof first.user != 'undefined') {
-
-		first.user = cleanUpUserObject(first.user);
-		
-		// use avatar if no cover photo
-		var coverPhotoHtml = '';
-		if(first.user.cover_photo !== false) {
-			coverPhotoHtml = 'background-image:url(\'' + first.user.cover_photo + '\')';
-			}
-		
-		// follows me?
-		var follows_you = '';
-		if(first.user.follows_you === true && window.myUserID != first.user.id) {
-			var follows_you = '<span class="follows-you">' + window.sL.followsYou + '</span>';			
-			}			
-		
-		// show user actions if logged in
-		var followingClass = '';
-		if(first.user.following) {
-			followingClass = 'following';
-			}	
-		var followButton = '';				
-		if(typeof window.loggedIn.screen_name != 'undefined' && window.myUserID != first.user.id) {			
-			var followButton = '<div class="user-actions"><button data-follow-user-id="' + first.user.id + '" data-follow-user="' + first.user.statusnet_profile_url + '" type="button" class="qvitter-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userFollow + '</span><span class="button-text following-text">' + window.sL.userFollowing + '</span><span class="button-text unfollow-text">' + window.sL.userUnfollow + '</span></button></div>';	
-			}
-		
-		// follow from external instance if logged out
-		if(typeof window.loggedIn.screen_name == 'undefined') {			
-			var followButton = '<div class="user-actions"><button type="button" class="external-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userExternalFollow + '</span></button></div>';	
-			}
-		
-		// edit profile button if me
-		if(typeof window.loggedIn.screen_name != 'undefined' && window.myUserID == first.user.id) {			
-			var followButton = '<div class="user-actions"><button type="button" class="edit-profile-button"><span class="button-text edit-profile-text">' + window.sL.editMyProfile + '</span></button></div>';	
-			}		
-		
-		// is webpage empty?
-		var emptyWebpage = '';
-		if(first.user.url.length<1) {
-			emptyWebpage = ' empty';				
-			}
-
-			
-		// change design
-		changeDesign(first.user);			
-
-		// remove any old profile card 
-		$('#feed').siblings('.profile-card').remove();
-
-		// insert profile card into dom
-		$('#feed').before('<div class="profile-card"><div class="profile-header-inner" style="' + coverPhotoHtml + '"><div class="profile-header-inner-overlay"></div><a class="profile-picture" href="' + first.user.profile_image_url_original + '"><img src="' + first.user.profile_image_url_profile_size + '" /></a><div class="profile-card-inner"><h1 class="fullname">' + first.user.name + '<span></span></h1><h2 class="username"><span class="screen-name">@' + first.user.screen_name + '</span>' + follows_you + '</h2><div class="bio-container"><p>' + first.user.description + '</p></div><p class="location-and-url"><span class="location">' + first.user.location + '</span><span class="url' + emptyWebpage + '"><span class="divider"> · </span><a href="' + first.user.url + '">' + first.user.url.replace('http://','').replace('https://','') + '</a></span></p></div></div><div class="profile-banner-footer"><ul class="stats"><li><a class="tweet-stats">' + window.sL.notices + '<strong>' + first.user.statuses_count + '</strong></a></li><li><a class="following-stats">' + window.sL.following + '<strong>' + first.user.friends_count + '</strong></a></li><li><a class="follower-stats">' + window.sL.followers + '<strong>' + first.user.followers_count + '</strong></a></li><li><a class="groups-stats">' + window.sL.groups + '<strong>' + first.user.groups_count + '</strong></a></li></ul>' + followButton + '<div class="clearfix"></div></div></div>');		
-		}
-	
-	// if user hasn't queeted or if we're not allowed to read their queets
-	else {
-		getFromAPI('users/show/' + screen_name + '.json', function(data){ if(data){
-			data = cleanUpUserObject(data);
-			
-			// use avatar if no cover photo
-			var coverPhotoHtml = '';
-			if(data.cover_photo !== false) {
-				coverPhotoHtml = 'background-image:url(\'' + data.cover_photo + '\')';
-				}				
-
-			// follows me?
-			var follows_you = '';
-			if(data.follows_you === true  && window.myUserID != data.id) {
-				var follows_you = '<span class="follows-you">' + window.sL.followsYou + '</span>';			
-				}
-
-			// show user actions if logged in
-			var followingClass = '';
-			if(data.following) {
-				followingClass = 'following';
-				}			
-			var followButton = '';
-			if(typeof window.loggedIn.screen_name != 'undefined' && window.myUserID != data.id) {			
-				var followButton = '<div class="user-actions"><button data-follow-user-id="' + data.id + '" data-follow-user="' + data.statusnet_profile_url + '" type="button" class="qvitter-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userFollow + '</span><span class="button-text following-text">' + window.sL.userFollowing + '</span><span class="button-text unfollow-text">' + window.sL.userUnfollow + '</span></button></div>';	
-				}
-				
-			// follow from external instance if logged out
-			if(typeof window.loggedIn.screen_name == 'undefined') {			
-				var followButton = '<div class="user-actions"><button type="button" class="external-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userExternalFollow + '</span></button></div>';	
-				}
-		
-			// edit profile button if me
-			if(typeof window.loggedIn.screen_name != 'undefined' && window.myUserID == data.id) {			
-				var followButton = '<div class="user-actions"><button type="button" class="edit-profile-button"><span class="button-text edit-profile-text">' + window.sL.editMyProfile + '</span></button></div>';	
-				}						
-			
-			// is webpage empty?
-			var emptyWebpage = '';
-			if(data.url.length<1) {
-				emptyWebpage = ' empty';				
-				}
-				
-			// change design
-			changeDesign(data);
-
-			// remove any old profile card and show profile card
-			$('#feed').siblings('.profile-card').remove();
-			$('#feed').before('<div class="profile-card"><div class="profile-header-inner" style="' + coverPhotoHtml + '"><div class="profile-header-inner-overlay"></div><a class="profile-picture" href="' + data.profile_image_url_original + '"><img src="' + data.profile_image_url_profile_size + '" /></a><div class="profile-card-inner"><h1 class="fullname">' + data.name + '<span></span></h1><h2 class="username"><span class="screen-name">@' + data.screen_name + '</span>' + follows_you + '</span></h2><div class="bio-container"><p>' + data.description + '</p></div><p class="location-and-url"><span class="location">' + data.location + '</span><span class="url' + emptyWebpage + '"><span class="divider"> · </span><a href="' + data.url + '">' + data.url.replace('http://','').replace('https://','') + '</a></span></p></div></div><div class="profile-banner-footer"><ul class="stats"><li><a class="tweet-stats">' + window.sL.notices + '<strong>' + data.statuses_count + '</strong></a></li><li><a class="following-stats">' + window.sL.following + '<strong>' + data.friends_count + '</strong></a></li><li><a class="follower-stats">' + window.sL.followers + '<strong>' + data.followers_count + '</strong></a></li><li><a class="groups-stats">' + window.sL.groups + '<strong>' + data.groups_count + '</strong></a></li></ul>' + followButton + '<div class="clearfix"></div></div></div>');		
-			}});		
+		addProfileCardToDOM(first.user);	
 		}		
 	}
 	
@@ -289,6 +469,10 @@ function groupProfileCard(groupAlias) {
 		if(typeof window.loggedIn.screen_name == 'undefined') {			
 			var memberButton = '<div class="user-actions"><button type="button" class="external-member-button"><span class="button-text join-text"><i class="join"></i>' + window.sL.joinExternalGroup + '</span></button></div>';	
 			}			
+
+		// change design
+		changeDesign({backgroundimage:false, backgroundcolor:false, linkcolor:false});
+
 		
 		// add card to DOM
 		$('#feed').siblings('.profile-card').remove();  // remove any old profile card 
@@ -331,7 +515,7 @@ function setNewCurrentStream(stream,actionOnSuccess,setLocation) {
 	// remember the most recent stream selection in global var
 	window.currentStream = stream;	
 	
-	// if this is a @user stream, i.e. user's queets, user's followers, user's following, we set _queets_ as the default stream in the menu
+	// a @user stream, i.e. user's queets, user's followers, user's following, we set _queets_ as the default stream in the menu
 	if(stream.substring(0,45) == 'statuses/followers.json?count=20&screen_name='
 	|| stream.substring(0,43) == 'statuses/friends.json?count=20&screen_name='
 	|| stream.substring(0,48) == 'statusnet/groups/list.json?count=10&screen_name='	
@@ -342,14 +526,14 @@ function setNewCurrentStream(stream,actionOnSuccess,setLocation) {
 		var defaultStreamName = 'statuses/user_timeline.json?' + stream.substring(stream.indexOf('screen_name='));
 		var streamHeader = '@' + stream.substring(stream.lastIndexOf('=')+1);
 		}
-	// if this is a my user streams, i.e. my followers, my following
+	// my user streams, i.e. my followers, my following
 	else if(stream == 'statuses/followers.json?count=20'
 	|| stream == 'statuses/friends.json?count=20'
 	|| stream == 'statusnet/groups/list.json?count=10')	{
 		var defaultStreamName = stream;
 		var streamHeader = '@' + window.loggedIn.screen_name;
 		}		
-	// if this is one of the default streams, get header from DOM
+	// the default streams, get header from DOM
 	else if(stream == 'statuses/friends_timeline.json'
 	|| stream == 'statuses/mentions.json'
 	|| stream == 'qvitter/statuses/notifications.json'	
@@ -360,25 +544,25 @@ function setNewCurrentStream(stream,actionOnSuccess,setLocation) {
 		var streamHeader = $('.stream-selection[data-stream-name="' + stream + '"]').attr('data-stream-header');
 		}	
 		
-	// if this is a !group stream
+	// !group stream
 	else if(stream.substring(0,26) == 'statusnet/groups/timeline/'
 		 || stream.substring(0,28) == 'statusnet/groups/membership/'
 		 || stream.substring(0,24) == 'statusnet/groups/admins/')	{
 		var defaultStreamName = 'statusnet/groups/timeline/' + stream.substring(stream.lastIndexOf('/')+1);
 		var streamHeader = '!' + stream.substring(stream.lastIndexOf('/')+1, stream.indexOf('.json'));
 		}		
-	// if this is a #tag stream
+	// #tag stream
 	else if(stream.substring(0,24) == 'statusnet/tags/timeline/')	{
 		var defaultStreamName = stream;
 		var hashtagString = stream.substring(stream.indexOf('/timeline/')+10,stream.indexOf('.json'));
 		var streamHeader = '#' + replaceHtmlSpecialChars(decodeURIComponent(hashtagString));
 		}			
-	// if this is a notice stream
+	// notice stream
 	else if(stream.substring(0,14) == 'statuses/show/')	{
 		var defaultStreamName = stream;
 		var streamHeader = 'notice/' + stream.substring(stream.indexOf('/show/')+6,stream.indexOf('.json'));
 		}					
-	// if this is a search stream
+	// search stream
 	else if(stream.substring(0,11) == 'search.json')	{
 		var defaultStreamName = stream;
 		var streamHeader = window.sL.searchVerb + ': ' + replaceHtmlSpecialChars(decodeURIComponent(stream.substring(stream.indexOf('?q=')+3)));
@@ -414,8 +598,7 @@ function setNewCurrentStream(stream,actionOnSuccess,setLocation) {
 		}			
 	else {
 		var h2FeedHeader = streamHeader;		
-		}									
-	
+		}				
 
 	// if we have a saved copy of this stream, show it immediately (but it is replaced when stream finishes to load later)
 	if(typeof window.oldStreams[window.currentStream] != "undefined") {
@@ -431,11 +614,7 @@ function setNewCurrentStream(stream,actionOnSuccess,setLocation) {
 
 		// also mark this stream as the current stream immediately, if a saved copy exists
 		addStreamToHistoryMenuAndMarkAsCurrent(streamHeader, defaultStreamName);	
-		
-		// and change design immediately
-		changeDesign(window.oldStreamsDesigns[window.currentStream]);
 		}
-
 	// otherwise we fade out and wait for stream to load
 	else {
 		// fade out
@@ -445,99 +624,60 @@ function setNewCurrentStream(stream,actionOnSuccess,setLocation) {
 			$('#feed-header-inner h2').html(h2FeedHeader);
 			});	
 		}
+		
+	// change design immediately to either cached design or logged in user's
+	if(typeof window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)] != 'undefined') {
+		changeDesign(window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)]);
+		}
+	else {
+		changeDesign({backgroundimage:window.loggedIn.background_image, backgroundcolor:window.loggedIn.backgroundcolor, linkcolor:window.loggedIn.linkcolor});									
+		}
+		
 	
-
-	// if this is user's user feed, i.e. followers etc, we want a profile card, which we need to get from user_timeline since the users/show api action is broken (auth doesn't work) 
+	// for these streams we want a user array in the header to build a profile card 
+	var addUserArray = '';
 	if(stream.substring(0,23) == 'statuses/followers.json'
 	|| stream.substring(0,21) == 'statuses/friends.json'
 	|| stream.substring(0,26) == 'statusnet/groups/list.json'	
 	|| stream.substring(0,35) == 'statuses/mentions.json?screen_name='
-	|| stream.substring(0,27) == 'favorites.json?screen_name='			
+	|| stream.substring(0,27) == 'favorites.json?screen_name='
+	|| stream.substring(0,27) == 'statuses/user_timeline.json'			
 	|| stream.substring(0,43) == 'statuses/friends_timeline.json?screen_name=')	{
-		getFromAPI(defaultStreamName + '&count=1', function(profile_data){			
-			if(profile_data) {
-				getFromAPI(stream, function(user_data){
-					if(user_data) {
-						// while waiting for this data user might have changed stream, so only proceed if current stream still is this one
-						if(window.currentStream == stream) {	
-							
-							// change design
-							changeDesign(window);
-							
-							// get screen name from stream, if not found, this is me
-							if(stream.indexOf('screen_name=')>-1) {
-								var thisUsersScreenName = stream.substring(stream.indexOf('screen_name=')+12);
-								}
-							else {
-								var thisUsersScreenName = window.loggedIn.screen_name;
-								}
-													
-							profileCardFromFirstObject(profile_data,thisUsersScreenName); // show profile card
-
-							// start checking for new queets again
-							window.clearInterval(checkForNewQueetsInterval);
-							checkForNewQueetsInterval=window.setInterval(function(){checkForNewQueets()},window.timeBetweenPolling);
-
-							// add this stream to the history menu
-							addStreamToHistoryMenuAndMarkAsCurrent(streamHeader, defaultStreamName);
-
-							remove_spinner();				
-							$('#feed-body').html(''); // empty feed only now so the scrollers don't flicker on and off
-							$('#new-queets-bar').parent().addClass('hidden'); document.title = window.siteTitle; // hide new queets bar if it's visible there
-							$('#feed-body').removeAttr('data-search-page-number'); // reset
-							addToFeed(user_data, false,'visible'); // add stream items to feed element
-							$('#feed').animate({opacity:'1'},150); // fade in
-							$('body').removeClass('loading-older');$('body').removeClass('loading-newer');
-							actionOnSuccess(); // return
-							}
-						}
-					});
-				}
-			});
-		}
-
-	// if this is a queet stream
-	else {
-		getFromAPI(stream, function(queet_data){ 
-			if(queet_data) {
-				// while waiting for this data user might have changed stream, so only proceed if current stream still is this one
-				if(window.currentStream == stream) {
-					
-					// change design
-					changeDesign(window);
-						
-					// show profile card if this is a user's queet stream
-					if(stream.substring(0,27) == 'statuses/user_timeline.json')	{
-						var thisUsersScreenName = stream.replace('statuses/user_timeline.json','').replace('?screen_name=','').replace('?id=','').replace('?user_id=','');
-						profileCardFromFirstObject(queet_data,thisUsersScreenName);
-						}
-					// show group profile card if this is a group stream
-					else if(stream.substring(0,26) == 'statusnet/groups/timeline/'
-						 || stream.substring(0,28) == 'statusnet/groups/membership/'
-						 || stream.substring(0,24) == 'statusnet/groups/admins/') {
-						var thisGroupAlias = stream.substring(stream.lastIndexOf('/')+1, stream.indexOf('.json'));
-						groupProfileCard(thisGroupAlias);
-						}						
-	
-					// start checking for new queets again
-					window.clearInterval(checkForNewQueetsInterval);
-					checkForNewQueetsInterval=window.setInterval(function(){checkForNewQueets()},window.timeBetweenPolling);
-
-					// add this stream to the history menu
-					addStreamToHistoryMenuAndMarkAsCurrent(streamHeader, defaultStreamName);
-
-					remove_spinner();				
-					$('#feed-body').html(''); // empty feed only now so the scrollers don't flicker on and off
-					$('#new-queets-bar').parent().addClass('hidden'); document.title = window.siteTitle; // hide new queets bar if it's visible there
-					addToFeed(queet_data, false,'visible'); // add stream items to feed element
-					$('#feed').animate({opacity:'1'},150); // fade in
-					$('body').removeClass('loading-older');$('body').removeClass('loading-newer');
-					$('html,body').scrollTop(0); // scroll to top
-					actionOnSuccess(); // return				
-					}
-				}
-			});		
+		addUserArray = '&withuserarray=1';
 		}	
+
+	// get stream
+	getFromAPI(stream + addUserArray, function(queet_data){ 
+		if(queet_data) {
+			// while waiting for this data user might have changed stream, so only proceed if current stream still is this one
+			if(window.currentStream == stream) {
+					
+				// show group profile card if this is a group stream
+				if(stream.substring(0,26) == 'statusnet/groups/timeline/'
+					 || stream.substring(0,28) == 'statusnet/groups/membership/'
+					 || stream.substring(0,24) == 'statusnet/groups/admins/') {
+					var thisGroupAlias = stream.substring(stream.lastIndexOf('/')+1, stream.indexOf('.json'));
+					groupProfileCard(thisGroupAlias);
+					}						
+
+				// start checking for new queets again
+				window.clearInterval(checkForNewQueetsInterval);
+				checkForNewQueetsInterval=window.setInterval(function(){checkForNewQueets()},window.timeBetweenPolling);
+
+				// add this stream to the history menu
+				addStreamToHistoryMenuAndMarkAsCurrent(streamHeader, defaultStreamName);
+
+				remove_spinner();				
+				$('#feed-body').html(''); // empty feed only now so the scrollers don't flicker on and off
+				$('#new-queets-bar').parent().addClass('hidden'); document.title = window.siteTitle; // hide new queets bar if it's visible there
+				addToFeed(queet_data, false,'visible'); // add stream items to feed element
+				$('#feed').animate({opacity:'1'},150); // fade in
+				$('body').removeClass('loading-older');$('body').removeClass('loading-newer');
+				$('html,body').scrollTop(0); // scroll to top
+				actionOnSuccess(); // return				
+				}
+			}
+		});		
 	}
 	
 /* ·  
@@ -555,7 +695,7 @@ function addStreamToHistoryMenuAndMarkAsCurrent(streamHeader, defaultStreamName)
 
 	if($('.stream-selection[data-stream-header="' + streamHeader + '"]').length==0
 	&& streamHeader != '@' + window.loggedIn.screen_name
-	&& typeof window.loggedIn.screen_name != 'undefined') { 			
+	&& typeof window.loggedIn.screen_name != 'undefined') { 			
 		$('#history-container').append('<a class="stream-selection" data-stream-header="' + streamHeader + '" href="' + window.siteInstanceURL + convertStreamToPath(defaultStreamName) + '">' + streamHeader + '<i class="chev-right"></i></a>');
 		updateHistoryLocalStorage();
 		}
@@ -860,7 +1000,7 @@ function expand_queet(q,doScrolling) {
 		}	
 	
 	// don't expand if this is a remote profile popup
-	if(q.closest('#popup-external-profile').length>0) {
+	if(q.closest('#popup-external-profile, #popup-local-profile').length>0) {
 		return;
 		}
 	
@@ -878,6 +1018,17 @@ function expand_queet(q,doScrolling) {
 			// remove some things right away
 			q.find('.inline-reply-caret').remove();
 			
+			// "unplay" gif image on collapse if there's only one attachment (switch to thumb)
+			var gifToUnPlay = q.children('.queet').find('.queet-thumbs.thumb-num-1').children('.thumb-container.play-button').children('.attachment-thumb[data-mime-type="image/gif"]');
+			if(gifToUnPlay.length > 0) {
+				gifToUnPlay.attr('src',gifToUnPlay.attr('data-thumb-url'));
+				gifToUnPlay.parent('.thumb-container').css('background-image','url(\'' + gifToUnPlay.attr('data-thumb-url') + '\')');
+				}
+			
+			// show thumbs (if hidden) and remove any iframe video immediately
+			q.children('.queet').find('.queet-thumbs').removeClass('hide-thumbs');	
+			q.children('.queet').find('iframe').remove();
+			
 			q.addClass('collapsing');
 			if(q.hasClass('conversation')) {
 				q.removeClass('expanded');	 
@@ -894,6 +1045,8 @@ function expand_queet(q,doScrolling) {
 				// give stream item a height
 				q.css('height',q.height() + 'px');
 				q.children('.queet').find('.expanded-content').css('height',q.find('.expanded-content').height() + 'px');							
+				q.children('.queet').find('.queet-thumbs.thumb-num-1').css('max-height',q.find('.queet-thumbs.thumb-num-1').height() + 'px');
+				q.children('.queet').find('.queet-thumbs.thumb-num-1 .thumb-container').css('max-height',q.find('.queet-thumbs.thumb-num-1').height() + 'px');				
 				
 				q.children('div').not('.queet').children('a').css('opacity','0.5');
 				q.children('div').not('.queet').children().children().css('opacity','0.5');
@@ -906,40 +1059,41 @@ function expand_queet(q,doScrolling) {
 					q.children('.queet').css('-o-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
 					q.children('.queet').css('-webkit-transition-duration',Math.round( collapseTime * 1000 * 10) / 10 + 's');
 					q.children('.queet').css('transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
+					q.children('.queet').find('.expanded-content, .queet-thumbs.thumb-num-1, .queet-thumbs.thumb-num-1 .thumb-container').css('-moz-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
+					q.children('.queet').find('.expanded-content, .queet-thumbs.thumb-num-1, .queet-thumbs.thumb-num-1 .thumb-container').css('-o-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
+					q.children('.queet').find('.expanded-content, .queet-thumbs.thumb-num-1, .queet-thumbs.thumb-num-1 .thumb-container').css('-webkit-transition-duration',Math.round( collapseTime * 1000 * 10) / 10 + 's');
+					q.children('.queet').find('.expanded-content, .queet-thumbs.thumb-num-1, .queet-thumbs.thumb-num-1 .thumb-container').css('transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
 					q.css('-moz-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
 					q.css('-o-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
 					q.css('-webkit-transition-duration',Math.round( collapseTime * 1000 * 10) / 10 + 's');
 					q.css('transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
-					q.find('.expanded-content').css('-moz-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
-					q.find('.expanded-content').css('-o-transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');
-					q.find('.expanded-content').css('-webkit-transition-duration',Math.round( collapseTime * 1000 * 10) / 10 + 's');
-					q.find('.expanded-content').css('transition-duration',Math.round( collapseTime / 1000 * 10) / 10 + 's');					
 
 					// set new heights and margins to animate to
-					var animateToHeight = q.children('.queet').outerHeight() - q.find('.inline-reply-queetbox').outerHeight() - q.children('.queet').find('.expanded-content').outerHeight() - 2;
+					var animateToHeight = q.children('.queet').outerHeight() - q.find('.inline-reply-queetbox').outerHeight() - q.children('.queet').find('.expanded-content').outerHeight() - Math.max(0,q.children('.queet').find('.queet-thumbs.thumb-num-1').outerHeight()-250) - 2;
 					if(animateToHeight < 73) { // no less than this
 						animateToHeight = 73;
 						}
 					q.css('height',animateToHeight + 'px');
 					q.children('.queet').css('margin-top', '-' + (q.children('.queet').offset().top - q.offset().top) + 'px');					
-					q.children('.queet').find('.expanded-content').css('height','0');					
-
+					q.children('.queet').find('.expanded-content').css('height','0');
+					q.children('.queet').find('.queet-thumbs.thumb-num-1, .queet-thumbs.thumb-num-1 .thumb-container').css('max-height','250px');
+					
+					if(doScrolling) {
+						setTimeout(function() {
+							backToMyScrollPos(q,qid,500,function(){
+								cleanUpAfterCollapseQueet(q);
+								});
+							}, collapseTime);
+						}
+					else {
+						setTimeout(function() {
+							cleanUpAfterCollapseQueet(q);		
+							}, collapseTime);					
+						}
+					
  					}, 50);		
  					
-				if(doScrolling) {
-					setTimeout(function() {
-						backToMyScrollPos(q,qid,500,function(){
-							setTimeout(function() {
-								cleanUpAfterCollapseQueet(q);
-								}, 250);													
-							});
-						}, collapseTime);
-					}
-				else {
-					setTimeout(function() {
-						cleanUpAfterCollapseQueet(q);		
-						}, collapseTime+250);					
-					}
+
    								
 				}    	    
 	    	}
@@ -959,19 +1113,21 @@ function expand_queet(q,doScrolling) {
 				// get full html for queet, first try localstorage cache
 				localStorageObjectCache_GET('fullQueetHtml',qid,function(data){
 					if(data) {
-						q.children('.queet').find('.queet-text').html($.trim(data.replace(/@<a/gi,'<a').replace(/!<a/gi,'<a').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">').replace(/&#64;<span class="vcard">/gi,'<span class="vcard">').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">')));
+						q.children('.queet').find('.queet-text').html(data);
+						q.children('.queet').outerHTML(detectRTL(q.children('.queet').outerHTML()));
 						}
 					else {
 						getFromAPI("attachment/" + attachmentId + ".json",function(data){
 							if(data) {
 								localStorageObjectCache_STORE('fullQueetHtml',qid,data);
-								q.children('.queet').find('.queet-text').html($.trim(data.replace(/@<a/gi,'<a').replace(/!<a/gi,'<a').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">').replace(/&#64;<span class="vcard">/gi,'<span class="vcard">').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">')));
+								q.children('.queet').find('.queet-text').html($.trim(data));
+								q.children('.queet').outerHTML(detectRTL(q.children('.queet').outerHTML()));								
 								}
 							});							
 						}
 					});				
 				}
-
+			
 			// add expanded container
 			var longdate = parseTwitterLongDate(q.find('.created-at').attr('data-created-at'));
 			var qurl = q.find('.created-at').find('a').attr('href');
@@ -980,94 +1136,77 @@ function expand_queet(q,doScrolling) {
 			
 			// show expanded content
 			q.find('.stream-item-footer').before('<div class="expanded-content"><div class="queet-stats-container"></div><div class="client-and-actions"><span class="metadata">' + metadata + '</span></div></div>');					
-	
 			
-			// maybe show images or videos, look for them in both the text and in the thumbnail container
-			$.each(q.children('.queet').find('.queet-text, .attachments').find('a'), function() {
-
-				var attachment_mimetype = $(this).find('img').attr('data-mime-type');
-
-				if(typeof attachment_mimetype == 'undefined') {
-					attachment_mimetype = '';
+			// "play" gif image on expand if there's only one attachment (switch to full gif from thumb)
+			var gifToPlay = q.children('.queet').find('.queet-thumbs.thumb-num-1').children('.thumb-container.play-button').children('.attachment-thumb[data-mime-type="image/gif"]');
+			if(gifToPlay.length > 0) {
+				gifToPlay.attr('src',gifToPlay.attr('data-full-image-url'));
+				gifToPlay.parent('.thumb-container').css('background-image','url(\'' + gifToPlay.attr('data-full-image-url') + '\')');
 				}
 
-				var attachment_title = $(this).attr('title');
-				
-				// attachments in the .attachments container don't have a title, their full url is in the href
-				if(typeof attachment_title == 'undefined') {
-					attachment_title = $(this).attr('href');					
-					}
-				
-				// filename extension
-				var attachment_title_extension = attachment_title.substr((~-attachment_title.lastIndexOf(".") >>> 0) + 2);
-
-				// attachments in the content link to /attachment/etc url and not direct to image/video, link is in title
-				if(typeof attachment_title != 'undefined') {
-					// images
-					if($.inArray(attachment_mimetype, ['image/gif', 'image/jpeg', 'image/png', 'image/svg+xml']) >= 0
-					|| $.inArray(attachment_title_extension, ['jpeg', 'gif', 'jpg','png','svg']) >= 0) {
-						if(q.children('.queet').find('.expanded-content').children('.media').children('a[href="' + attachment_title + '"]').length < 1) { // not if already showed
-							
-							// local attachment with a thumbnail
-							if(typeof $(this).find('img').attr('data-big-thumbnail') != 'undefined') {
-								var attachment_src = $(this).find('img').attr('data-big-thumbnail');
-								}
-							
-							// external "deep linked" images 
-							else {
-								var attachment_src = attachment_title;
-								}
-							
-							// don't show thumbnails for gifs
-							if(attachment_mimetype == 'image/gif') {
-								var attachment_src = attachment_title;
-								}
-
-							if(q.children('.queet').find('.expanded-content').children('.media').length > 0) {
-								q.children('.queet').find('.media').last().after('<div class="media"><a href="' + attachment_title + '" target="_blank"><img src="' + attachment_src + '" /></a></div>');								
-								}
-							else {
-								q.children('.queet').find('.expanded-content').prepend('<div class="media"><a href="' + attachment_title + '" target="_blank"><img src="' + attachment_src + '" /></a></div>');								
-								}
-							}
+			// if there's only one thumb and it's a youtube video, show it inline
+			if(q.children('.queet').find('.queet-thumbs.thumb-num-1').children('.thumb-container.play-button.youtube').length == 1) {
+				var youtubeId = q.children('.queet').find('.queet-thumbs.thumb-num-1').children('.thumb-container.play-button.youtube').children('.attachment-thumb').attr('data-full-image-url').replace('http://www.youtube.com/watch?v=','').replace('https://www.youtube.com/watch?v=','').replace('http://youtu.be/','').replace('https://youtu.be/','').substr(0,11);
+				if(q.children('.queet').find('.expanded-content').children('.media').children('iframe[src="//www.youtube.com/embed/' + youtubeId + '"]').length < 1) { // not if already showed
+					// hide video thumbnail if it's the only one
+					if(q.children('.queet').find('.queet-thumbs').children('.thumb-container').length < 2) {
+						q.children('.queet').find('.queet-thumbs').addClass('hide-thumbs');
 						}
-					// videos
-					else if($.inArray(attachment_mimetype, ['video/mp4', 'video/ogg', 'video/quicktime', 'video/webm']) >= 0) {
-						if(q.children('.queet').find('.expanded-content').children('.media').children('video').children('source[href="' + attachment_title + '"]').length < 1) { // not if already showed
-
-							// local attachment with a thumbnail
-							if(typeof $(this).find('img').attr('data-big-thumbnail') != 'undefined') {
-								var attachment_poster = $(this).find('img').attr('data-big-thumbnail');
-								}
-
-							if(q.children('.queet').find('.expanded-content').children('.media').length > 0) {
-								q.children('.queet').find('.media').last().after('<div class="media"><video class="u-video" controls="controls" poster="' + attachment_poster + '"><source type="' + attachment_mimetype + '" src="' + attachment_title + '" /></video></div>');
-								}
-							else {
-								q.children('.queet').find('.expanded-content').prepend('<div class="media"><video class="u-video" controls="controls" poster="' + attachment_poster + '"><source type="' + attachment_mimetype + '" src="' + attachment_title + '" /></video></div>');								
-								}
-						}
-					}
-					else if(attachment_title.indexOf('youtube.com/watch?v=') > -1 || attachment_title.indexOf('://youtu.be/') > -1) {
-						var youtubeId = attachment_title.replace('http://www.youtube.com/watch?v=','').replace('https://www.youtube.com/watch?v=','').replace('http://youtu.be/','').replace('https://youtu.be/','').substr(0,11);
-						if(q.children('.queet').find('.expanded-content').children('.media').children('iframe[src="//www.youtube.com/embed/' + youtubeId + '"]').length < 1) { // not if already showed
-							q.children('.queet').find('.expanded-content').prepend('<div class="media"><iframe width="420" height="315" src="//www.youtube.com/embed/' + youtubeId + '" frameborder="0" allowfullscreen></iframe></div>');						
-							}
-						}
-					else {
-						// other plugins, e.g. gotabulo, can check for other attachment file formats to expand
-						window.currentlyExpanding = {
-							"attachment_title":attachment_title,
-							"attachment_mimetype":attachment_mimetype,
-							"attachment_title_extension":attachment_title_extension,
-							"streamItem":q,
-							"thisAttachmentLink":$(this)													
-							};
-						$(document).trigger('qvitterExpandOtherAttachments');
-						}
-					}
-				});
+					// show video
+					q.children('.queet').find('.expanded-content').prepend('<div class="media"><iframe width="510" height="315" src="//www.youtube.com/embed/' + youtubeId + '" frameborder="0" allowfullscreen></iframe></div>');						
+					}		
+				}
 			
+			// show certain attachments in expanded content
+			if(q.data('attachments') != 'undefined') {
+				$.each(q.data('attachments'), function() {
+				
+					var attachment_mimetype = this.mimetype;
+					var attachment_title = this.url;				
+								
+					// filename extension
+					var attachment_title_extension = attachment_title.substr((~-attachment_title.lastIndexOf(".") >>> 0) + 2);
+
+					// attachments in the content link to /attachment/etc url and not direct to image/video, link is in title
+					if(typeof attachment_title != 'undefined') {
+					
+						// hack to make remote webm-movies load
+						if(attachment_title_extension == 'webm') {
+							attachment_mimetype = 'video/webm';
+							}
+
+						// videos
+						if($.inArray(attachment_mimetype, ['video/mp4', 'video/ogg', 'video/quicktime', 'video/webm']) >=0) {
+							if(q.children('.queet').find('.expanded-content').children('.media').children('video').children('source[href="' + attachment_title + '"]').length < 1) { // not if already showed
+
+								// local attachment with a thumbnail
+								var attachment_poster = '';
+								if(typeof this.thumb_url != 'undefined') {
+									attachment_poster = ' poster="' + this.thumb_url + '"';
+									}
+
+								if(q.children('.queet').find('.expanded-content').children('.media').length > 0) {
+									q.children('.queet').find('.media').last().after('<div class="media"><video class="u-video" controls="controls"' + attachment_poster + '><source type="' + attachment_mimetype + '" src="' + attachment_title + '" /></video></div>');
+									}
+								else {
+									q.children('.queet').find('.expanded-content').prepend('<div class="media"><video class="u-video" controls="controls"' + attachment_poster + '><source type="' + attachment_mimetype + '" src="' + attachment_title + '" /></video></div>');								
+									}
+							}
+						}
+						else {
+							// other plugins, e.g. gotabulo, can check for other attachment file formats to expand
+							window.currentlyExpanding = {
+								"attachment_title":attachment_title,
+								"attachment_mimetype":attachment_mimetype,
+								"attachment_title_extension":attachment_title_extension,
+								"streamItem":q,
+								"thisAttachmentLink":$(this)													
+								};
+							$(document).trigger('qvitterExpandOtherAttachments');
+							}
+						}
+					});		
+				}
 
 			// get and show favs and repeats
 			getFavsAndRequeetsForQueet(q, qid);	
@@ -1083,7 +1222,7 @@ function expand_queet(q,doScrolling) {
 				
 				// show inline reply form if logged in
 				if(typeof window.loggedIn.screen_name != 'undefined') {			
-					q.find('#q-' + qid).append(replyFormHtml(q,qid));	
+					q.children('.queet').append(replyFormHtml(q,qid));	
 					}
 							
 				}			
@@ -1104,6 +1243,8 @@ function cleanUpAfterCollapseQueet(q) {
 	q.find('.show-full-conversation').remove();																					
 	q.removeAttr('style');			
 	q.children('.queet').removeAttr('style');
+	q.children('.queet').find('.queet-thumbs.thumb-num-1').removeAttr('style');	
+	q.children('.queet').find('.queet-thumbs.thumb-num-1 .thumb-container').css('max-height','');	
 	}
 
 
@@ -1151,9 +1292,10 @@ function replyFormHtml(q,qid) {
 	var more_reply_tos = '';
 	var more_reply_tos_text = '';	
 	$.each(q.children('.queet').find('.queet-text').find('.mention'),function(key,obj){
-		if($(obj).html() != user_screen_name && $(obj).html() != reply_to_screen_name && $(obj).html() != $('#user-screen-name').html()) {
-			more_reply_tos = more_reply_tos + '&nbsp;<a>@' + $(obj).html() + '</a>';
-			more_reply_tos_text = more_reply_tos_text + ' @' + $(obj).html();			
+		var thisMention = $(obj).html().replace('@','');
+		if(thisMention != user_screen_name && thisMention != reply_to_screen_name && thisMention != $('#user-screen-name').html()) {
+			more_reply_tos = more_reply_tos + '&nbsp;<a>@' + thisMention + '</a>';
+			more_reply_tos_text = more_reply_tos_text + ' @' + thisMention;			
 			}
 		});
 	
@@ -1174,57 +1316,36 @@ function replyFormHtml(q,qid) {
    ·   
    · · · · · · · · · · · · · */ 
 
-function popUpAction(popupId, heading, bodyHtml, footerHtml){
+function popUpAction(popupId, heading, bodyHtml, footerHtml, popUpWidth){
 	$('.modal-container').remove(); // remove any open popups
 	var allFooterHtml = '';
 	if(footerHtml) {
 		allFooterHtml = '<div class="modal-footer">' + footerHtml + '</div>';
 		}
 	$('body').prepend('<div id="' + popupId + '" class="modal-container"><div class="modal-draggable"><div class="modal-content"><button class="modal-close" type="button"><span class="icon"></span></button><div class="modal-header"><h3 class="modal-title">' + heading + '</h3></div><div class="modal-body">' + bodyHtml + '</div>' + allFooterHtml + '</div></div></div>');	
-	var this_modal_height = $('#' + popupId).children('.modal-draggable').height();
-	var this_modal_width = $('#' + popupId).children('.modal-draggable').width();
-	var popupPos = $('#' + popupId).children('.modal-draggable').offset().top - $(window).scrollTop();
+	var thisPopUp = $('#' + popupId).children('.modal-draggable');
+
+	if(typeof popUpWidth != 'undefined') {
+		thisPopUp.width(popUpWidth);
+		}
+	centerPopUp(thisPopUp);
+	}	
+function centerPopUp(thisPopUp) {
+	thisPopUp.css('margin-top','');
+	thisPopUp.css('margin-left','');	
+	var this_modal_height = thisPopUp.height();
+	var this_modal_width = thisPopUp.width();
+	var popupPos = thisPopUp.offset().top - $(window).scrollTop();
 	if((popupPos-(this_modal_height/2))<5) {
 		var marginTop = 5-popupPos;
 		}
 	else {
 		var marginTop = 0-this_modal_height/2;
 		}
-	$('#' + popupId).children('.modal-draggable').css('margin-top', marginTop + 'px');
-	$('#' + popupId).children('.modal-draggable').css('margin-left', '-' + (this_modal_width/2) + 'px');		
-	$('#' + popupId).children('.modal-draggable').draggable({ handle: ".modal-header" });
-	$('#' + popupId).children('.modal-header').disableSelection();
-	}	
-	
-	
-
-
-/* · 
-   · 
-   ·  Gnu social don't use url as uri anymore, we need to handle both cases	
-   ·
-   · · · · · · · · · · · · · */ 	
-  
-function convertNewGNUSocialURItoURL(obj) {
-
-	if(typeof obj.uri == 'undefined') {
-		obj.uri = '';
-		}
-
-	if(obj.uri.substring(0,4) != 'http') {									
-		
-		// guess the url if we only have the non-url uri
-		if(typeof obj.url == 'undefined') {							
-			var httpOrHttps = obj.user.statusnet_profile_url.substring(0,obj.user.statusnet_profile_url.indexOf('://'));
-			obj.uri = httpOrHttps + '://' + obj.uri.substring(4,obj.uri.indexOf(',')) + '/notice/' + obj.uri.substring(obj.uri.indexOf('noticeId=')+9,obj.uri.indexOf(':objectType'));
-			}
-		
-		// if an url record is present, use that
-		else {
-			obj.uri = obj.url;
-			}
-		}
-	return obj;
+	thisPopUp.css('margin-top', marginTop + 'px');
+	thisPopUp.css('margin-left', '-' + (this_modal_width/2) + 'px');		
+	thisPopUp.draggable({ handle: ".modal-header" });
+	thisPopUp.disableSelection();	
 	}
 	
 	
@@ -1279,13 +1400,13 @@ function showConversation(q, qid, data) {
 											
 					if(obj.source == 'activity') {
 						var queetHtml = '<div id="conversation-stream-item-' + obj.id + '" class="stream-item conversation activity hidden-conversation" data-source="' + escape(obj.source) + '" data-quitter-id="' + obj.id + '"  data-quitter-id-in-stream="' + obj.id + '"><div class="queet" id="conversation-q-' + obj.id + '"><div class="queet-content"><div class="stream-item-header"><small class="created-at" data-created-at="' + obj.created_at + '"><a>' + queetTime + '</a></small></div><div class="queet-text">' + $.trim(obj.statusnet_html) + '</div></div></div></div>';
+
+						// detect rtl
+						queetHtml = detectRTL(queetHtml);
 						}
 					else {
 						var queetHtml = buildQueetHtml(obj, obj.id, 'conversation hidden-conversation', false, true);
 						}						
-					
-					// detect rtl
-					queetHtml = detectRTL(queetHtml);						
 					
 					if(q.hasClass('expanded')) { // add queet to conversation only if still expanded
 					
@@ -1445,6 +1566,7 @@ function addToFeed(feed, after, extraClasses, isReply) {
 				}
 			}				
 
+
 		// if this is the notifications feed, but not if it is a reply
 		if(window.currentStream.substring(0,35) == 'qvitter/statuses/notifications.json'
 		&& !isReply) {					
@@ -1473,13 +1595,11 @@ function addToFeed(feed, after, extraClasses, isReply) {
 								
 				if(obj.ntype == 'like') {	
 					var noticeTime = parseTwitterDate(obj.notice.created_at);
-					obj.notice = convertNewGNUSocialURItoURL(obj.notice);
-					var notificationHtml = '<div data-quitter-id-in-stream="' + obj.id + '" id="stream-item-n-' + obj.id + '" class="stream-item ' + extraClassesThisRun + ' notification like"><div class="queet"><div class="dogear"></div>' + ostatusHtml + '<div class="queet-content"><div class="stream-item-header"><a class="account-group" href="' + obj.from_profile.statusnet_profile_url + '"></span><img class="avatar" src="' + obj.from_profile.profile_image_url + '" /><strong class="name" data-user-id="' + obj.from_profile.id + '" title="@' + obj.from_profile.screen_name + '">' + obj.from_profile.name + '</strong></a> ' + window.sL.xFavedYourQueet + '<small class="created-at" data-created-at="' + obj.created_at + '" title="' + obj.created_at + '">' + notificationTime + '</small></div><div class="small-grey-notice"><a href="' + obj.notice.uri + '">' + noticeTime + '</a>: ' + $.trim(obj.notice.statusnet_html) + '</div></div></div></div>';
+					var notificationHtml = '<div data-quitter-id-in-stream="' + obj.id + '" id="stream-item-n-' + obj.id + '" class="stream-item ' + extraClassesThisRun + ' notification like"><div class="queet"><div class="dogear"></div>' + ostatusHtml + '<div class="queet-content"><div class="stream-item-header"><a class="account-group" href="' + obj.from_profile.statusnet_profile_url + '"></span><img class="avatar" src="' + obj.from_profile.profile_image_url + '" /><strong class="name" data-user-id="' + obj.from_profile.id + '" title="@' + obj.from_profile.screen_name + '">' + obj.from_profile.name + '</strong></a> ' + window.sL.xFavedYourQueet + '<small class="created-at" data-created-at="' + obj.created_at + '" title="' + obj.created_at + '">' + notificationTime + '</small></div><div class="small-grey-notice"><a href="' + window.siteInstanceURL + 'notice/' + obj.notice.id + '">' + noticeTime + '</a>: ' + $.trim(obj.notice.statusnet_html) + '</div></div></div></div>';
 					}
 				else if(obj.ntype == 'repeat') {	
-					obj.notice = convertNewGNUSocialURItoURL(obj.notice);
 					var noticeTime = parseTwitterDate(obj.notice.created_at);
-					var notificationHtml = '<div data-quitter-id-in-stream="' + obj.id + '" id="stream-item-n-' + obj.id + '" class="stream-item ' + extraClassesThisRun + ' notification repeat"><div class="queet"><div class="queet-content"><div class="dogear"></div>' + ostatusHtml + '<div class="stream-item-header"><a class="account-group" href="' + obj.from_profile.statusnet_profile_url + '"><img class="avatar" src="' + obj.from_profile.profile_image_url + '" /><strong class="name" data-user-id="' + obj.from_profile.id + '" title="@' + obj.from_profile.screen_name + '">' + obj.from_profile.name + '</strong></a> ' + window.sL.xRepeatedYourQueet + '<small class="created-at" data-created-at="' + obj.created_at + '" title="' + obj.created_at + '">' + notificationTime + '</small></div><div class="small-grey-notice"><a href="' + obj.notice.uri + '">' + noticeTime + '</a>: ' + $.trim(obj.notice.statusnet_html) + '</div></div></div></div>';
+					var notificationHtml = '<div data-quitter-id-in-stream="' + obj.id + '" id="stream-item-n-' + obj.id + '" class="stream-item ' + extraClassesThisRun + ' notification repeat"><div class="queet"><div class="queet-content"><div class="dogear"></div>' + ostatusHtml + '<div class="stream-item-header"><a class="account-group" href="' + obj.from_profile.statusnet_profile_url + '"><img class="avatar" src="' + obj.from_profile.profile_image_url + '" /><strong class="name" data-user-id="' + obj.from_profile.id + '" title="@' + obj.from_profile.screen_name + '">' + obj.from_profile.name + '</strong></a> ' + window.sL.xRepeatedYourQueet + '<small class="created-at" data-created-at="' + obj.created_at + '" title="' + obj.created_at + '">' + notificationTime + '</small></div><div class="small-grey-notice"><a href="' + window.siteInstanceURL + 'notice/' + obj.notice.id + '">' + noticeTime + '</a>: ' + $.trim(obj.notice.statusnet_html) + '</div></div></div></div>';
 					}
 				else if(obj.ntype == 'mention') {	
 					var notificationHtml = buildQueetHtml(obj.notice, obj.id, extraClassesThisRun + ' notification mention');
@@ -1645,6 +1765,18 @@ function addToFeed(feed, after, extraClasses, isReply) {
 		// ordinary tweet
 		else {
 			
+			// if this is a special qvitter-delete-notice activity notice it means we try to hide
+			// the deleted notice from our stream
+			if(typeof obj.qvitter_delete_notice != 'undefined' && obj.qvitter_delete_notice == true) {	
+				var streamItemToHide = $('.stream-item[data-uri="' + obj.text + '"]');
+				streamItemToHide.animate({opacity:'0.2'},1000,'linear',function(){
+					$(this).css('height',$(this).height() + 'px');
+					$(this).animate({height:'0px'},500,'linear',function(){
+						$(this).remove();
+						});
+					});
+				}			
+
 			// don't show any notices with object_type "activity"
 			if(typeof obj.is_activity != 'undefined' && obj.is_activity === true) {
 				return true;
@@ -1656,7 +1788,7 @@ function addToFeed(feed, after, extraClasses, isReply) {
 				// activity get special design
 				if(obj.source == 'activity') {
 					var queetTime = parseTwitterDate(obj.created_at);															
-					var queetHtml = '<div id="stream-item-' + obj.id + '" class="stream-item activity ' + extraClassesThisRun + '" data-quitter-id="' + obj.id + '" data-conversation-id="' + obj.statusnet_conversation_id + '" data-quitter-id-in-stream="' + obj.id + '"><div class="queet" id="q-' + obj.id + '"><div class="queet-content"><div class="stream-item-header"><small class="created-at" data-created-at="' + obj.created_at + '"><a href="' + obj.uri + '">' + queetTime + '</a></small></div><div class="queet-text">' + $.trim(obj.statusnet_html) + '</div></div></div></div>';
+					var queetHtml = '<div id="stream-item-' + obj.id + '" class="stream-item activity ' + extraClassesThisRun + '" data-quitter-id="' + obj.id + '" data-conversation-id="' + obj.statusnet_conversation_id + '" data-quitter-id-in-stream="' + obj.id + '"><div class="queet" id="q-' + obj.id + '"><div class="queet-content"><div class="stream-item-header"><small class="created-at" data-created-at="' + obj.created_at + '"><a href="' + window.siteInstanceURL + 'notice/' + obj.id + '">' + queetTime + '</a></small></div><div class="queet-text">' + $.trim(obj.statusnet_html) + '</div></div></div></div>';
 
 					// detect rtl
 					queetHtml = detectRTL(queetHtml);	
@@ -1795,7 +1927,7 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 	// actions only for logged in users
 	var queetActions = '';
 	if(typeof window.loggedIn.screen_name != 'undefined') {			
-		queetActions = '<ul class="queet-actions"><li class="action-reply-container"><a class="with-icn"><span class="icon sm-reply" title="' + window.sL.replyVerb + '"></span></a></li>' + requeetHtml + '<li class="action-fav-container">' + favoriteHtml + '</li><li class="action-ellipsis-container"><a class="with-icn"><span class="icon sm-ellipsis" title="' + window.sL.ellipsisMore + '"></span></a></li></ul>';
+		queetActions = '<ul class="queet-actions"><li class="action-reply-container"><a class="with-icn"><span class="icon sm-reply" title="' + window.sL.replyVerb + '"></span></a></li>' + requeetHtml + '<li class="action-rq-num" data-rq-num="' + obj.repeat_num + '">' + obj.repeat_num + '</li><li class="action-fav-container">' + favoriteHtml + '</li><li class="action-fav-num" data-fav-num="' + obj.fave_num + '">' + obj.fave_num + '</li><li class="action-ellipsis-container"><a class="with-icn"><span class="icon sm-ellipsis" title="' + window.sL.ellipsisMore + '"></span></a></li></ul>';
 		}
 		
 	// reply-to html					
@@ -1814,9 +1946,10 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 		
 	// image attachment thumbnails
 	var attachment_html = '';
+	var attachmentNum = 0;
 	if(typeof obj.attachments != "undefined") {
 		$.each(obj.attachments, function(){
-			if(this.id != null) {
+			if(this.id != null) { // if there's an id we assume this is a image or video
 				var bigThumbW = 1000;
 				var bigThumbH = 3000;
 				if(bigThumbW > window.siteMaxThumbnailSize) {
@@ -1826,24 +1959,52 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 					bigThumbH = window.siteMaxThumbnailSize;
 					}
 				
-				// if thumb_url is set, we use that
-				if(typeof this.thumb_url != 'undefined') {
-					var thumb_url = this.thumb_url;
+				// very long landscape images should not have background-size:cover
+				var noCoverClass='';
+				if(this.width/this.height > 2) {
+					noCoverClass=' no-cover';
 					}
-				else {
-					var thumb_url = window.siteAttachmentURLBase + this.id + '/thumbnail?w=200&h=200';					
+					
+				// play button for videos and animated gifs
+				var playButtonClass = '';			
+				if(this.url.indexOf('://www.youtube.com') > -1
+				|| (typeof this.animated != 'undefined' && this.animated === true)) {
+					var playButtonClass = ' play-button';					
 					}
 				
-				attachment_html = attachment_html + '<a href="' + this.url + '"><img data-mime-type="' + this.mimetype + '" data-big-thumbnail="' + window.siteAttachmentURLBase + this.id + '/thumbnail?w=' + bigThumbW + '&h=' + bigThumbH + '" src="' + thumb_url + '"/></a>';
+				// youtube class
+				var youTubeClass = '';			
+				if(this.url.indexOf('://www.youtube.com') > -1) {
+					youTubeClass = ' youtube';
+					}
+
+								
+				// animated gifs always get default small non-animated thumbnail
+				if(this.animated === true && typeof this.thumb_url != 'undefined') {
+					var img_url = this.thumb_url;	
+					}
+				// if no dimensions are set, go with default thumb
+				else if(this.width === null && this.height === null && typeof this.thumb_url != 'undefined') {
+					var img_url = this.thumb_url;					
+					}
+				// large images get large thumbnail
+				else if(this.width > 1000) {
+					var img_url = window.siteAttachmentURLBase + this.id + '/thumbnail?w=' + bigThumbW + '&h=' + bigThumbH;
+					}
+				// no thumbnails for small images
+				else {
+					var img_url = this.url;
+					}
+				
+				attachment_html = attachment_html + '<a style="background-image:url(\'' + img_url + '\')" class="thumb-container' + noCoverClass + playButtonClass + youTubeClass + '" href="' + this.url + '"><img class="attachment-thumb" data-mime-type="' + this.mimetype + '" src="' + img_url + '"/ data-width="' + this.width + '" data-height="' + this.height + '" data-full-image-url="' + this.url + '" data-thumb-url="' + img_url + '"></a>';
+				attachmentNum++;
 				}
 			else if (this.mimetype == 'image/svg+xml') {
-				attachment_html = attachment_html + '<a href="' + this.url + '"><img data-mime-type="' + this.mimetype + '" src="' + this.url + '"/></a>';
+				attachment_html = attachment_html + '<a style="background-image:url(\'' + this.url + '\')" class="thumb-container" href="' + this.url + '"><img class="attachment-thumb" data-mime-type="' + this.mimetype + '" src="' + this.url + '"/></a>';
+				attachmentNum++;
 				}
 			});
 		}	
-	if(attachment_html.length>0) {
-		attachment_html = '<div class="attachments">' + attachment_html + '</div>';
-		}
 		
 	// requeets
 	var requeetHtml = '';
@@ -1852,7 +2013,6 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 		requeetHtml = '<div class="context" id="requeet-' + requeeted_by.id + '"><span class="with-icn"><i class="badge-requeeted"></i><span class="requeet-text"> ' + window.sL.requeetedBy.replace('{requeeted-by}',requeetedByHtml) + '</span></span></div>';
 		}
 	
-	obj = convertNewGNUSocialURItoURL(obj);		
 
 	// external
 	var ostatusHtml = '';
@@ -1863,7 +2023,9 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 	var queetTime = parseTwitterDate(obj.created_at);															
 	var queetHtml = '<div \
 						id="' + idPrepend + 'stream-item-' + obj.id + '" \
+						data-uri="' + obj.uri + '" \
 						class="stream-item ' + extraClassesThisRun + ' ' + requeetedClass + ' ' + favoritedClass + '" \
+						data-attachments=\'' + JSON.stringify(obj.attachments) + '\'\
 						data-source="' + escape(obj.source) + '" \
 						data-quitter-id="' + obj.id + '" \
 						data-conversation-id="' + obj.statusnet_conversation_id + '" \
@@ -1873,7 +2035,6 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 						' + requeetedByMe + '>\
 							<div class="queet" id="' + idPrepend + 'q-' + obj.id + '">\
 								' + requeetHtml + '\
-								' + attachment_html + '\
 								' + ostatusHtml + '\
 								<div class="queet-content">\
 									<div class="stream-item-header">\
@@ -1888,6 +2049,7 @@ function buildQueetHtml(obj, idInStream, extraClassesThisRun, requeeted_by, isCo
 										</small>\
 									</div>\
 									<div class="queet-text">' + $.trim(obj.statusnet_html) + '</div>\
+									<div class="queet-thumbs thumb-num-' + attachmentNum + '">' + attachment_html + '</div>\
 									<div class="stream-item-footer">\
 										' + queetActions + '\
 									</div>\

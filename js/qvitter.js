@@ -1,37 +1,41 @@
 
- /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                             Q V I T T E R                                   ·
-  ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                                 <o)                                         ·
-  ·                                  /_////                                     ·
-  ·                                 (____/                                      ·
-  ·                                          (o<                                ·
-  ·                                   o> \\\\_\                                 ·
-  ·                                 \\)   \____)                                ·
-  ·                                                                             ·
-  ·                                                                             ·    
-  ·                                                                             ·
-  ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
-  ·  under the  terms of the GNU Affero General Public License as published by  ·
-  ·  the Free Software Foundation,  either version three of the License or (at  ·
-  ·  your option) any later version.                                            ·
-  ·                                                                             ·
-  ·  Qvitter is distributed  in hope that  it will be  useful but  WITHOUT ANY  ·
-  ·  WARRANTY;  without even the implied warranty of MERCHANTABILTY or FITNESS  ·
-  ·  FOR A PARTICULAR PURPOSE.  See the  GNU Affero General Public License for  ·
-  ·  more details.                                                              ·
-  ·                                                                             ·
-  ·  You should have received a copy of the  GNU Affero General Public License  ·
-  ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
-  ·                                                                             ·
-  ·  Contact h@nnesmannerhe.im if you have any questions.                       ·
-  ·                                                                             · 
-  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
+/*· · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
+  ·                                                                               ·
+  ·                                                                               ·
+  ·                             Q V I T T E R                                     ·
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·                                 <o)                                           ·
+  ·                                  /_////                                       ·
+  ·                                 (____/                                        ·
+  ·                                          (o<                                  ·
+  ·                                   o> \\\\_\                                   ·
+  ·                                 \\)   \____)                                  ·  
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·     @licstart  The following is the entire license notice for the             ·
+  ·     JavaScript code in this page.                                             ·
+  ·                                                                               ·
+  ·     Copyright (C) 2015  Hannes Mannerheim and other contributors              ·
+  ·                                                                               ·    
+  ·                                                                               ·
+  ·     This program is free software: you can redistribute it and/or modify      ·
+  ·     it under the terms of the GNU Affero General Public License as            ·
+  ·     published by the Free Software Foundation, either version 3 of the        ·
+  ·     License, or (at your option) any later version.                           ·
+  ·                                                                               ·
+  ·     This program is distributed in the hope that it will be useful,           ·
+  ·     but WITHOUT ANY WARRANTY; without even the implied warranty of            ·
+  ·     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             ·
+  ·     GNU Affero General Public License for more details.                       ·
+  ·                                                                               ·
+  ·     You should have received a copy of the GNU Affero General Public License  ·
+  ·     along with this program.  If not, see <http://www.gnu.org/licenses/>.     ·
+  ·                                                                               ·
+  ·     @licend  The above is the entire license notice                           · 
+  ·     for the JavaScript code in this page.                                     · 
+  ·                                                                               · 
+  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
   
 // object to keep old states of streams in, to speed up stream change  
 window.oldStreams = new Object();
@@ -58,15 +62,49 @@ window.onpopstate = function(event) {
 	
 /* · 
    · 
+   ·   welcome text expand and collapse
+   · 
+   · · · · · · · · · · · · · */ 
+$('body').on('click','.show-full-welcome-text, .front-welcome-text:not(.expanded) sup',function(){
+	$('.front-welcome-text').toggleClass('expanded');
+	if($('.front-welcome-text').hasClass('expanded')) {
+		var welcomeTextInnerObjectsHeightSum = $('.front-welcome-text > p').outerHeight() + $('.front-welcome-text > h1').outerHeight() + 50;
+		$('.front-welcome-text').css('height', welcomeTextInnerObjectsHeightSum + 'px')		
+		}
+	else {
+		$('.front-welcome-text').css('height', '180px');
+		$('.front-welcome-text').css('overflow', 'hidden');
+		var scrollTo = $(window).scrollTop() - ($('.front-welcome-text').outerHeight()-200);
+		if(scrollTo < 0) { scrollTo = 0;}
+		$('html, body').animate({ scrollTop: scrollTo}, 300, 'linear');		
+		}
+	});
+$('body').on('click','.welcome-text-register-link',function(){	
+	var scrollTo = $('#user-container').offset().top;
+	$('html, body').animate({ scrollTop: scrollTo}, 300, 'linear');		
+	});
+	
+
+
+/* · 
+   · 
    ·   fix login and register box to top when they reach top 
    · 
    · · · · · · · · · · · · · */ 
 	
 $(window).scroll(function(e){ 
-	if ($(this).scrollTop() > ($('#feed').offset().top-50) && $('#login-content').css('position') != 'fixed'){ 
-		$('#login-content, .front-signup').not('#popup-signup').css({'position': 'fixed', 'top': '50px'}); 
+
+	if($('#page-container > .profile-card').length > 0) {
+		var feedOrProfileCardOffsetTop = $('#page-container > .profile-card').offset().top;
 		}
-	else if ($(this).scrollTop() < ($('#feed').offset().top-50) && $('#login-content').css('position') != 'absolute'){ 
+	else {
+		var feedOrProfileCardOffsetTop = $('#feed').offset().top;
+		}
+		
+	if ($(this).scrollTop() > (feedOrProfileCardOffsetTop-55) && $('#login-content').css('position') != 'fixed'){ 
+		$('#login-content, .front-signup').not('#popup-signup').css({'position': 'fixed', 'top': '55px'}); 
+		}
+	else if ($(this).scrollTop() < (feedOrProfileCardOffsetTop-55) && $('#login-content').css('position') != 'absolute'){ 
 		$('#login-content, .front-signup').not('#popup-signup').css({'position': 'absolute', 'top': 'auto'}); 
 		}		
  	});	
@@ -295,11 +333,6 @@ $(window).load(function() {
 		window.selectedLanguage = 'en';
 		}	
 
-	// if this is a RTL-language, add rtl class to body
-	if(window.selectedLanguage == 'ar'
-	|| window.selectedLanguage == 'fa') {
-		$('body').addClass('rtl');
-		}
 				
 	// if we already have this version of this language in localstorage, we
 	// use that cached version. we do this because $.ajax doesn't respect caching, it seems
@@ -329,18 +362,37 @@ $(window).load(function() {
 function proceedToSetLanguageAndLogin(data){
 	window.sL = data;
 
+	// if this is a RTL-language, add rtl class to body
+	if(window.sL.directionality == 'rtl') {
+		$('body').addClass('rtl');
+		}
+
 	window.siteTitle = $('head title').html(); // remember this for later use
+
 
 	// replace placeholders in translation
 	$.each(window.sL,function(k,v){
 		window.sL[k] = v.replace(/{site-title}/g,window.siteTitle);
 		});
 
-	// set some static string
-	$('.front-welcome-text h1').html(window.sL.welcomeHeading);
-	if (window.enableWelcomeText) {
-		$('.front-welcome-text p').html(window.sL.welcomeText);
-	}
+
+	// set some static strings
+	if(window.customWelcomeText !== false && typeof window.customWelcomeText[window.selectedLanguage] != 'undefined') {
+		$('.front-welcome-text').html(window.customWelcomeText[window.selectedLanguage]);
+		
+		// collapse long welcome texts and add expand button
+		if($('.front-welcome-text').outerHeight()>250) {
+			$('.front-welcome-text').css('height','240px');
+			$('.front-welcome-text').css('overflow', 'hidden');			
+			$('.front-welcome-text').append('<div class="show-full-welcome-text"></div>');
+			}
+		}
+	else {	
+		$('.front-welcome-text').html('<h1>' + window.sL.welcomeHeading +  '</h1>');		
+		if(window.enableWelcomeText) {
+			$('.front-welcome-text').append(window.sL.welcomeText);				
+			}
+		}
 	$('#nickname').attr('placeholder',window.sL.loginUsername);
 	$('#password').attr('placeholder',window.sL.loginPassword);
 	$('button#submit-login').html(window.sL.loginSignIn);
@@ -397,7 +449,7 @@ function proceedToSetLanguageAndLogin(data){
 			logoutWithoutReload(false);
 			remove_spinner();						
 			},true);
-		}	
+		}
 	}	
 
 /* · 
@@ -420,26 +472,6 @@ function doLogin(streamToSet) {
 	$('#submit-login').attr('disabled','disabled');
 	$('#submit-login').focus(); // prevents submit on enter to close alert-popup on wrong credentials
 	display_spinner();
-		
-		// set colors if the api supports it
-		if(typeof window.loggedIn.linkcolor != 'undefined' &&
-	       typeof window.loggedIn.backgroundcolor != 'undefined') {
-			window.loggedIn.linkcolor = window.loggedIn.linkcolor || '';	// no null value		
-			window.loggedIn.backgroundcolor = window.loggedIn.backgroundcolor || ''; // no null value
-			window.userLinkColor = window.loggedIn.linkcolor;
-			window.userBackgroundColor = window.loggedIn.backgroundcolor;			       
-			window.userBackgroundImage = window.loggedIn.background_image;			       			
-			if(window.userLinkColor.length != 6) {
-				window.userLinkColor = window.defaultLinkColor;
-				}	
-			if(window.userBackgroundColor.length != 6) {
-				window.userBackgroundColor = window.defaultBackgroundColor;
-				}		  		
-			if(window.userBackgroundImage.length < 1) {
-				window.userBackgroundImage = '';
-				}		  						    
-	        }
-		
 		
 		// add user data to DOM, show search form, remeber user id, show the feed
 		$('#user-container').css('z-index','1000');
@@ -473,8 +505,12 @@ function doLogin(streamToSet) {
 				$.each(data,function(k,v){
 					if(v[2] === false) { var avatar = window.defaultAvatarStreamSize; }
 					else { 	var avatar = v[2]; }
+					if(v[3]) {
+						// extract server base url
+						v[3] = v[3].substring(v[3].indexOf('://')+3,v[3].lastIndexOf(v[1])-1);
+						}					
 					v[0] = v[0] || v[1]; // if name is null we go with username there too
-					window.following[i] = { 'id': k,'name': v[0], 'username': v[1],'avatar': avatar };
+					window.following[i] = { 'id': k,'name': v[0], 'username': v[1],'avatar': avatar, 'url':v[3] };
 					i++;
 					});
 				}
@@ -498,7 +534,8 @@ function doLogin(streamToSet) {
 			$('#settingslink .dropdown-toggle').fadeIn('slow');
 			$('#top-compose').fadeIn('slow');
 			$('input#nickname').blur();
-			remove_spinner();			
+			remove_spinner();
+			cacheSyntaxHighlighting(); // do this now after everything is loaded, to not stall slow computers 
 			},true);
 
 	}
@@ -573,11 +610,7 @@ $('#classic-link').click(function(){
    · · · · · · · · · · · · · */ 
 
 function logoutWithoutReload(doShake) {
-
-	if(window.currentStream == 'statuses/public_timeline.json') {
-		$('body').css('background-image', 'url(' + window.fullUrlToThisQvitterApp + window.siteBackground +')');
-		}
-											
+					
 	$('input#nickname').focus();	
 	$('.front-signup').animate({opacity:'1'},200);
 	if(doShake) {
@@ -591,7 +624,7 @@ function logoutWithoutReload(doShake) {
 				$('input#password').animate({backgroundColor:'#fff'},1000);					
 				});
 			}
-		$('.front-welcome-text').fadeIn(3000);						
+		$('.front-welcome-text').show();						
 		});
 	$('#page-container').animate({opacity:'1'},200);	
 	
@@ -903,6 +936,11 @@ $('body').on('click','a', function(e) {
 	if(!!$(this).attr('donthijack') || $(this).attr('donthijack') == '') {
 		return;		
 		}
+
+	// if we're clicking something in a profile card popup, close it!
+	if($(this).closest('#popup-local-profile, #popup-external-profile').length>0) {
+		$('.modal-container').remove();		
+		}
 		
 	// all links opens in new tab
 	$(this).attr('target','_blank'); 
@@ -937,8 +975,18 @@ $('body').on('click','a', function(e) {
 			setNewCurrentStream('favorites.json',function(){},true);				
 			}			
 		// profiles
-		else if ((/^[a-zA-Z0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/','')))) {
-			var linkNickname = $(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/','');
+		else if ((/^[a-zA-Z0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/','')))
+		|| (/^[0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/user/','')))) {
+			
+			if($(this).attr('href').indexOf('/user/') > -1) {
+				var linkNickname = $(this).text().toLowerCase();
+				if(linkNickname.substring(0,1) == '@') {
+					linkNickname = linkNickname.substring(1);
+					}
+				}
+			else {
+				var linkNickname = $(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/','');				
+				}
 			
 			// don't hijack /groups-url
 			if(linkNickname == 'groups') {
@@ -946,16 +994,44 @@ $('body').on('click','a', function(e) {
 				}
 			
 			e.preventDefault();
-			if($(this).parent().attr('id') == 'user-profile-link') { // logged in user
+
+			// logged in user
+			if($(this).parent().attr('id') == 'user-profile-link'
+			|| linkNickname == window.loggedIn.screen_name) {
 				setNewCurrentStream('statuses/user_timeline.json?screen_name=' + window.loggedIn.screen_name,function(){},true);	
 				}
-			else { // any user
-				setNewCurrentStream('statuses/user_timeline.json?screen_name=' + linkNickname,function(){},true);								
+			// when in local profile popups
+			else if($(this).closest('#popup-local-profile').length>0) {
+				setNewCurrentStream('statuses/user_timeline.json?screen_name=' + linkNickname,function(){},true);												
+				}
+			// any local user, not in popups –> open popup
+			else { 
+
+				$(this).addClass('local-profile-clicked');
+			
+				popUpAction('popup-local-profile', '','<div id="popup-local-profile-spinner" style="height:300px;"></div>',false);			
+				display_spinner('#popup-local-profile-spinner');
+			
+				var cachedUserArray = userArrayCacheGetByProfileUrlAndNickname($(this).attr('href'), linkNickname);
+
+				if(cachedUserArray && cachedUserArray.local) {
+					openLocalProfileInPopup(cachedUserArray.local);
+					remove_spinner();			
+					$('.local-profile-clicked').removeClass('local-profile-clicked');		
+					}
+			
+				// but always query the server also
+				getFromAPI('users/show.json?id=' + linkNickname,function(data){
+					if(data) {
+						// update the popup if it's still open
+						if($('#popup-local-profile').length>0) {
+							openLocalProfileInPopup(data);					
+							remove_spinner();	
+							$('.local-profile-clicked').removeClass('local-profile-clicked');												
+							}
+						}				
+					});	
 				}			
-			}
-		else if((/^[0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/user/','')))) {
-			e.preventDefault();
-			setNewCurrentStream('statuses/user_timeline.json?screen_name=' + $(this).text().toLowerCase(),function(){},true);	
 			}
 		// tags
 		else if ($(this).attr('href').indexOf(window.siteRootDomain + '/tag/')>-1) {
@@ -975,6 +1051,9 @@ $('body').on('click','a', function(e) {
 				}
 			else {
 				var groupName = $(this).text().toLowerCase();
+				if(groupName.substring(0,1) == '!') {
+					groupName = groupName.substring(1);
+					}
 				}
 			setNewCurrentStream('statusnet/groups/timeline/' + groupName + '.json',function(){},true);				
 			}	
@@ -1004,75 +1083,46 @@ $('body').on('click','a', function(e) {
 		         || ($(this).closest('.stream-item').hasClass('activity') && $(this).attr('href').indexOf('/group/')==-1)) // or if it's a activity notice but not a group link
 		         && typeof window.loggedIn.screen_name != 'undefined') { // if logged in
 			e.preventDefault();
-			display_spinner();
 			$(this).addClass('external-profile-clicked');
+			
+			popUpAction('popup-external-profile', '','<div id="popup-external-profile-spinner" style="height:300px;"></div>',false);			
+			display_spinner('#popup-external-profile-spinner');
+			
+			// try getting from cache, to display immediately
+			if($(this).hasClass('account-group')) {
+				var externalNickname = $(this).children('.screen-name').text();
+				}
+			else {
+				var externalNickname = $(this).text();
+				}
+			if(externalNickname.substring(0,1) == '@') {
+				externalNickname = externalNickname.substring(1);
+				}
+			var cachedUserArray = userArrayCacheGetByProfileUrlAndNickname($(this).attr('href'), externalNickname);
+
+			if(cachedUserArray && cachedUserArray.external) {
+				openExternalProfileInPopup(cachedUserArray);
+				remove_spinner();			
+				$('.external-profile-clicked').removeClass('external-profile-clicked');		
+				}
+			
+			// but always query the server also
 			getFromAPI('qvitter/external_user_show.json?profileurl=' + encodeURIComponent($(this).attr('href')),function(data){
 
 				if(data && data.external !== null) {
 					
-					// local profile id and follow class
-					var followLocalIdHtml = '';
-					var followingClass = '';					
-					if(typeof data.local != 'undefined') {
-						followLocalIdHtml = ' data-follow-user-id="' + data.local.id + '"';
-
-						if(data.local.following) {
-							followingClass = 'following';
-							}
+					// update the popup if it's still open
+					if($('#popup-external-profile').length>0) {					
+						openExternalProfileInPopup(data);					
+						remove_spinner();	
 						}
-										
-					// empty strings and zeros instead of null
-					data = cleanUpUserObject(data.external);
 						
-					// old statusnet-versions might not have full avatar urls in their api response
-					if(typeof data.profile_image_url_original == 'undefined'
-						   || data.profile_image_url_original === null
-						   || data.profile_image_url_original.length == 0) {
-						data.profile_image_url_original = data.profile_image_url;													
-						}
-					if(typeof data.profile_image_url_profile_size == 'undefined'
-						   || data.profile_image_url_profile_size === null
-						   || data.profile_image_url_profile_size.length == 0) {
-						data.profile_image_url_profile_size = data.profile_image_url;													
-						}						
-						
-					// we might have a cover photo
-					if(typeof data.cover_photo != 'undefined' && data.cover_photo !== false) {
-						var cover_photo = data.cover_photo;
-						}
-					else {
-						var cover_photo = data.profile_image_url_original;						
-						}		
-
-					// is webpage empty?
-					var emptyWebpage = '';
-					if(data.url.length<1) {
-						emptyWebpage = ' empty';				
-						}						
-						
-					var serverUrl = data.statusnet_profile_url.replace('/' + data.screen_name,'');
-					var userApiUrl = serverUrl + '/api/statuses/user_timeline.json?screen_name=' + data.screen_name;
-					var screenNameWithServer = '@' + data.screen_name + '@' + serverUrl.replace('http://','').replace('https://','');						
-					var followButton = '<div class="user-actions"><button' + followLocalIdHtml + ' data-follow-user="' + data.statusnet_profile_url + '" type="button" class="qvitter-follow-button ' + followingClass + '"><span class="button-text follow-text"><i class="follow"></i>' + window.sL.userFollow + '</span><span class="button-text following-text">' + window.sL.userFollowing + '</span><span class="button-text unfollow-text">' + window.sL.userUnfollow + '</span></button></div>';						
-					
-					// preview latest notice
-					var noticeHtml = '';
-					if(typeof data.status != 'undefined') {
-						data.status.user = data;
-						var noticeHtml = buildQueetHtml(data.status);						
-						}
-
-					var profileCard = '<div class="profile-card"><div class="profile-header-inner" style="background-image:url(\'' + cover_photo + '\')"><div class="profile-header-inner-overlay"></div><a class="profile-picture"><img src="' + data.profile_image_url_profile_size + '" /></a><div class="profile-card-inner"><h1 class="fullname">' + data.name + '<span></span></h1><h2 class="username"><span class="screen-name"><a target="_blank" href="' + data.statusnet_profile_url + '">' + screenNameWithServer + '</a></span><span class="follow-status"></span></h2><div class="bio-container"><p>' + data.description + '</p></div><p class="location-and-url"><span class="location">' + data.location + '</span><span class="url' + emptyWebpage + '"><span class="divider"> · </span><a target="_blank" href="' + data.url + '">' + data.url.replace('http://','').replace('https://','') + '</a></span></p></div></div><div class="profile-banner-footer"><ul class="stats"><li><a target="_blank" href="' + data.statusnet_profile_url + '">' + window.sL.notices + '<strong>' + data.statuses_count + '</strong></a></li><li><a target="_blank" href="' + data.statusnet_profile_url + '/subscriptions">' + window.sL.following + '<strong>' + data.friends_count + '</strong></a></li><li><a target="_blank" href="' + data.statusnet_profile_url + '/subscribers">' + window.sL.followers + '<strong>' + data.followers_count + '</strong></a></li></ul>' + followButton + '<div class="clearfix"></div></div></div><div class="clearfix"></div>';		
-					
-					popUpAction('popup-external-profile', screenNameWithServer,profileCard + noticeHtml,'<a class="go-to-external-profile" href="' + data.statusnet_profile_url + '">' + window.sL.goToExternalProfile + '</a>');
-					
-					remove_spinner();	
-					$('a').removeClass('external-profile-clicked');					
+					$('.external-profile-clicked').removeClass('external-profile-clicked');						
 					}
-				// if external lookup failed, trigger click again. 
+				// if external lookup failed, and we don't have a cached profile card, trigger click again. 
 				// it will not be hijacked since we don't remove the external-profile-clicked class here 
-				else {
-					remove_spinner();	
+				else if($('#popup-external-profile-spinner').length > 0){
+					$('.modal-container').remove();
 					$('.external-profile-clicked')[0].click();
 					$('.external-profile-clicked').removeClass('external-profile-clicked');
 					}
@@ -1355,7 +1405,7 @@ $('body').on('click','#new-queets-bar',function(){
    · 
    ·   Expand and de-expand queets when clicking anywhere but on a few element types
    ·   
-   · · · · · · · · · · · · · */ 
+   · · · · · · · · · · · · · */
 
 $('body').on('click','.queet',function (event) {
 	if(!$(event.target).is('a')
@@ -1364,11 +1414,11 @@ $('body').on('click','.queet',function (event) {
 		&& !$(event.target).is('.cm-tag')
 		&& !$(event.target).is('.cm-group')
 		&& !$(event.target).is('.cm-url')						
-		&& !$(event.target).is('pre')		
+		&& !$(event.target).is('pre')
+		&& !$(event.target).is('img')		
 		&& !$(event.target).is('.name')
 		&& !$(event.target).is('.queet-box')
-		&& !$(event.target).is('.syntax-two')			
-		&& !$(event.target).is('img')				
+		&& !$(event.target).is('.syntax-two')						
 		&& !$(event.target).is('button')				
 		&& !$(event.target).is('.show-full-conversation')						
 		&& !$(event.target).is('span.mention')
@@ -1390,16 +1440,239 @@ $('body').on('click','.queet',function (event) {
 		}	
 	});
 	
+
+/* · 
+   · 
+   ·   Image popups
+   ·   
+   · · · · · · · · · · · · · */	
+
+$('body').on('click','.stream-item .queet img.attachment-thumb',function (event) {
+	event.preventDefault();
+	
+	// don't do anything if we are in the middle of collapsing
+	if($(this).closest('.stream-item').hasClass('collapsing')) {
+		// no action
+		}
+	// if the stream item isn't expanded, expand that
+	else if(!$(this).closest('.stream-item').hasClass('expanded')) {
+		expand_queet($(this).closest('.stream-item'));
+		}
+	// otherwise we open the popup
+	else {
+		var thisAttachmentThumbSrc = $(this).attr('src'); 
+		var parentStreamItem = $(this).closest('.stream-item');
+		var $parentStreamItemClone = $('<div/>').append(parentStreamItem.outerHTML());
+	
+		if(!parentStreamItem.hasClass('conversation')) {
+			$parentStreamItemClone.find('.stream-item.conversation').remove();			
+			}
+	
+		var $queetThumbsClone = $('<div/>').append($parentStreamItemClone.find('.queet-thumbs').outerHTML());	
+	
+		$parentStreamItemClone.find('.queet-thumbs, .expanded-content, .inline-reply-queetbox, .stream-item-footer').remove();
+		var footerHTML = $parentStreamItemClone.find('.queet').outerHTML();
+		$thumbToDisplay = $queetThumbsClone.find('img.attachment-thumb[src="' + thisAttachmentThumbSrc + '"]');
+		$thumbToDisplay.parent().addClass('display-this-thumb');
+
+		// "play" all animated gifs and add youtube iframes to all youtube videos
+		$.each($queetThumbsClone.find('img.attachment-thumb'),function(){
+			if($(this).attr('data-mime-type') == 'image/gif'
+			&& $(this).parent().hasClass('play-button')) {
+				$(this).attr('src',$(this).attr('data-full-image-url'));
+				$(this).parent('.thumb-container').css('background-image','url(\'' + $(this).attr('data-full-image-url') + '\')');
+				}
+			else if($(this).parent().hasClass('youtube')){
+				
+				// autoplay a clicked video
+				var autoplayFlag = '';
+				if($(this).parent().hasClass('display-this-thumb')) {
+					autoplayFlag = '&autoplay=1';
+					}
+				
+				var youtubeId = $(this).attr('data-full-image-url').replace('http://www.youtube.com/watch?v=','').replace('https://www.youtube.com/watch?v=','').replace('http://youtu.be/','').replace('https://youtu.be/','').substr(0,11);
+				$(this).parent().prepend('<iframe width="510" height="315" src="//www.youtube.com/embed/' + youtubeId + '?enablejsapi=1&version=3&playerapiid=ytplayer' + autoplayFlag + '" frameborder="0" allowscriptaccess="always" allowfullscreen></iframe>');
+				}			
+			});
+				
+		// navigation buttons
+		var imgNum = parentStreamItem.children('.queet').find('.attachment-thumb').length;
+		if(imgNum > 1) {
+			$queetThumbsClone.find('.queet-thumbs').before('<div class="prev-thumb"></div>');
+			$queetThumbsClone.find('.queet-thumbs').after('<div class="next-thumb"></div>');			
+			}
+	
+		if(parentStreamItem.hasClass('expanded')) {	
+			
+			var calculatedDimensions = calculatePopUpAndImageDimensions($thumbToDisplay.attr('src'));
+			var $thisImgInQueetThumbsClone = $queetThumbsClone.find('img[src="' + $thumbToDisplay.attr('src') + '"]');
+				
+			// set dimensions
+			$thisImgInQueetThumbsClone.width(calculatedDimensions.displayImgWidth);
+			$thisImgInQueetThumbsClone.parent('.thumb-container').width(calculatedDimensions.displayImgWidth);
+			$thisImgInQueetThumbsClone.parent('.thumb-container').children('iframe').attr('width',calculatedDimensions.displayImgWidth);
+			$thisImgInQueetThumbsClone.parent('.thumb-container').children('iframe').attr('height',calculatedDimensions.displayImgHeight);			
+		
+			// open popup
+			popUpAction('queet-thumb-popup', '', '' + $queetThumbsClone.outerHTML() + '', footerHTML, calculatedDimensions.popUpWidth);
+			disableOrEnableNavigationButtonsInImagePopup($('#queet-thumb-popup'));			
+			}
+		}
+	});
+	
+// popups can be max 900px wide, and should not be higher than the window, so we need to do some calculating 			
+function calculatePopUpAndImageDimensions(img_src) {
+
+		// trick to get width and height, we can't go with what gnusocial tells us, because
+		// gnusocial doesn't (always?) report width and height after proper orientation
+		$('body').prepend('<div id="img-dimension-check" style="opacity:0;"><img src="' + img_src + '" /></div>');
+		var imgWidth = $('#img-dimension-check img').width();
+		var imgHeight = $('#img-dimension-check img').height();	
+		$('#img-dimension-check').remove();
+
+
+		// e.g. svg's may not have dimensions set, in that case we just make them small			
+		if(typeof imgWidth == 'undefined' && typeof imgHeight == 'undefined')  {
+			return {popUpWidth: 540, displayImgWidth: 540};			
+			}
+
+		var thisImgWidth = parseInt(imgWidth,10);
+		var thisImgHeight = parseInt(imgHeight,10);	
+		var maxImageHeight = $(window).height() - 120; // 120 being a little more than a short queet in the footer	
+			
+		if(thisImgWidth < 540) {
+			var displayImgWidth = thisImgWidth;
+			var popUpWidth = 540;
+			if(thisImgHeight > maxImageHeight) {
+				displayImgWidth = Math.round(maxImageHeight/thisImgHeight*displayImgWidth);
+				}
+			}
+		else if(thisImgWidth < 900) {
+			var displayImgWidth = thisImgWidth;
+			if(thisImgHeight > maxImageHeight) {
+				displayImgWidth = Math.round(maxImageHeight/thisImgHeight*displayImgWidth);
+				if(displayImgWidth < 540) {
+					var popUpWidth = 540;					
+					}
+				else {
+					var popUpWidth = displayImgWidth;					
+					}
+				}
+			else {
+				var popUpWidth = displayImgWidth;
+				}
+			}
+		else {
+			var displayImgWidth = 900;
+			var displayImgHeight = 900/thisImgWidth*thisImgHeight;
+			if(displayImgHeight > maxImageHeight) {
+				displayImgWidth = Math.round(maxImageHeight*displayImgWidth/displayImgHeight);				
+				if(displayImgWidth < 540) {
+					var popUpWidth = 540;					
+					}
+				else if(displayImgWidth < 900) {
+					var popUpWidth = displayImgWidth;					
+					}
+				else {
+					var popUpWidth = 900;
+					}
+				}
+			else {
+				var popUpWidth = 900;
+				}	
+			}	
+	return {popUpWidth: popUpWidth, displayImgWidth: displayImgWidth};
+	}
+
+// switch to next image when clicking the image in the popup
+$('body').on('click','#queet-thumb-popup .attachment-thumb',function (event) {
+	event.preventDefault();
+	
+	var nextImage = $(this).parent().next().children('.attachment-thumb');
+	if(nextImage.length>0) {
+		
+		// start and stop youtube videos, if any
+		$.each($(this).parent('.youtube').children('iframe'),function(){
+			this.contentWindow.postMessage('{"event":"command","func":"' + 'stopVideo' + '","args":""}', '*');
+			});
+		$.each(nextImage.parent('.youtube').children('iframe'),function(){
+			this.contentWindow.postMessage('{"event":"command","func":"' + 'playVideo' + '","args":""}', '*');
+			});	
+	
+		// set dimensions of next image and the popup
+		var calculatedDimensions = calculatePopUpAndImageDimensions(nextImage.attr('src'));
+		nextImage.width(calculatedDimensions.displayImgWidth);		
+		nextImage.parent('.thumb-container').width(calculatedDimensions.displayImgWidth);
+		nextImage.parent('.thumb-container').children('iframe').attr('width',calculatedDimensions.displayImgWidth);
+		nextImage.parent('.thumb-container').children('iframe').attr('height',calculatedDimensions.displayImgHeight);					
+		$('#queet-thumb-popup .modal-draggable').width(calculatedDimensions.popUpWidth);		
+	
+		// switch image
+		$(this).parent().removeClass('display-this-thumb');
+		$(this).parent().next().addClass('display-this-thumb');
+		disableOrEnableNavigationButtonsInImagePopup($('#queet-thumb-popup'));	
+		centerPopUp($('#queet-thumb-popup .modal-draggable'));					
+		}
+					
+	});
+
+// navigation buttons in image popup
+$('body').on('click','#queet-thumb-popup .next-thumb',function (event) {
+	$(this).parent().find('.display-this-thumb').children('img').trigger('click');
+	});
+$('body').on('click','#queet-thumb-popup .prev-thumb',function (event) {
+	var prevImage = $(this).parent().find('.display-this-thumb').prev().children('img');
+	if(prevImage.length>0) {
+	
+		// start and stop youtube videos, if any
+		$.each($(this).parent().find('.display-this-thumb.youtube').children('iframe'),function(){
+			this.contentWindow.postMessage('{"event":"command","func":"' + 'stopVideo' + '","args":""}', '*');
+			});
+		$.each(prevImage.parent('.youtube').children('iframe'),function(){
+			this.contentWindow.postMessage('{"event":"command","func":"' + 'playVideo' + '","args":""}', '*');
+			});
+	    
+		// set dimensions of next image and the popup
+		var calculatedDimensions = calculatePopUpAndImageDimensions(prevImage.attr('src'));
+		prevImage.width(calculatedDimensions.displayImgWidth);
+		prevImage.parent('.thumb-container').width(calculatedDimensions.displayImgWidth);
+		prevImage.parent('.thumb-container').children('iframe').attr('width',calculatedDimensions.displayImgWidth);
+		prevImage.parent('.thumb-container').children('iframe').attr('height',calculatedDimensions.displayImgHeight);							
+		$('#queet-thumb-popup .modal-draggable').width(calculatedDimensions.popUpWidth);
+	
+		// switch image
+		$(this).parent().find('.display-this-thumb').removeClass('display-this-thumb');
+		prevImage.parent().addClass('display-this-thumb');	
+		disableOrEnableNavigationButtonsInImagePopup($('#queet-thumb-popup'));
+		centerPopUp($('#queet-thumb-popup .modal-draggable'));
+		}	
+	});
+
+function disableOrEnableNavigationButtonsInImagePopup(popUp) {
+	if(popUp.find('.display-this-thumb').prev().length < 1) {
+		popUp.find('.prev-thumb').addClass('disabled');
+		}
+	else {
+		popUp.find('.prev-thumb').removeClass('disabled');		
+		}
+	if(popUp.find('.display-this-thumb').next().length < 1) {
+		popUp.find('.next-thumb').addClass('disabled');
+		}
+	else {
+		popUp.find('.next-thumb').removeClass('disabled');		
+		}		
+	}
 	
 /* · 
    · 
-   ·   Collapse all open conversations and ellipsis menus on esc or when clicking the margin  
+   ·   Collapse all open conversations, ellipsis menus and the welcome text on esc or when clicking the margin  
    ·   
    · · · · · · · · · · · · · */ 
 
 $('body').click(function(event){	
 	if($(event.target).is('body')) {
 		$('.action-ellipsis-container').children('.dropdown-menu').remove();
+		$('.front-welcome-text.expanded > .show-full-welcome-text').trigger('click');
 		$.each($('.stream-item.expanded'),function(){
 			expand_queet($(this), false);
 			});
@@ -1409,6 +1682,7 @@ $('body').click(function(event){
 $(document).keyup(function(e){
 	if(e.keyCode==27) { // esc
 		$('.action-ellipsis-container').children('.dropdown-menu').remove();
+		$('.front-welcome-text.expanded > .show-full-welcome-text').trigger('click');		
 		$.each($('.stream-item.expanded'),function(){
 			expand_queet($(this), false);
 			});
@@ -1468,15 +1742,25 @@ $('body').on('click','.action-ellipsis-container .delete-queet',function(e){
 
 $('body').on('click','.action-rt-container .icon:not(.is-mine)',function(){
 	var this_stream_item = $(this).closest('.stream-item');
+	var this_queet = this_stream_item.children('.queet');
 	var this_action = $(this).closest('li'); 
 	
 	// requeet
 	if(!this_action.children('.with-icn').hasClass('done')) {	
+
+		// update the repeat count immediately
+		var newRqNum = parseInt(this_queet.find('.action-rq-num').html(),10)+1;
+		this_queet.find('.action-rq-num').html(newRqNum);
+		this_queet.find('.action-rq-num').attr('data-rq-num',newRqNum);	
+
 		this_action.children('.with-icn').addClass('done');
 		this_stream_item.addClass('requeeted');				
 		
 		// requeet animation
-		this_action.children('.with-icn').children('.sm-rt').addClass('rotate');				
+		this_action.children('.with-icn').children('.sm-rt').addClass('rotate');		
+		
+		// remove the fav and rq cache for this queet, to avoid number flickering 
+		localStorageObjectCache_STORE('favsAndRequeets',this_stream_item.attr('data-quitter-id'), false);				
 
 		// post requeet
 		postActionToAPI('statuses/retweet/' + this_stream_item.attr('data-quitter-id') + '.json', function(data) {
@@ -1521,7 +1805,8 @@ $('body').on('click','.action-rt-container .icon:not(.is-mine)',function(){
    · · · · · · · · · · · · · */ 
 
 $('body').on('click','.action-fav-container',function(){
-	var this_stream_item = $(this).parent().parent().parent().parent().parent();
+	var this_stream_item = $(this).closest('.stream-item');
+	var this_queet = this_stream_item.children('.queet');
 
 	// don't do anything if this is a queet being posted 
 	if(this_stream_item.hasClass('temp-post')) {
@@ -1532,12 +1817,20 @@ $('body').on('click','.action-fav-container',function(){
 
 	// fav
 	if(!this_action.children('.with-icn').hasClass('done')) {	
+	
+		// update the fav count immediately
+		var newFavNum = parseInt(this_queet.find('.action-fav-num').html(),10)+1;
+		this_queet.find('.action-fav-num').html(newFavNum);
+		this_queet.find('.action-fav-num').attr('data-fav-num',newFavNum);	
 
 		this_action.children('.with-icn').addClass('done');
-		this_stream_item.addClass('favorited');						
+		this_stream_item.addClass('favorited');				
 
 		// fav animation
 		this_action.children('.with-icn').children('.sm-fav').addClass('pulse');
+		
+		// remove the fav and rq cache for this queet, to avoid number flickering 
+		localStorageObjectCache_STORE('favsAndRequeets',this_stream_item.attr('data-quitter-id'), false);		
 
 		// post fav	
 		postActionToAPI('favorites/create/' + this_stream_item.attr('data-quitter-id') + '.json', function(data) {
@@ -1559,16 +1852,23 @@ $('body').on('click','.action-fav-container',function(){
 		}
 	// unfav
 	else  {
-		display_spinner();	
+	
+		// update the fav count immediately
+		var newFavNum = Math.max(0, parseInt(this_queet.find('.action-fav-num').html(),10)-1);
+		this_queet.find('.action-fav-num').html(newFavNum);
+		this_queet.find('.action-fav-num').attr('data-fav-num',newFavNum);	
+	
 		this_action.children('.with-icn').removeClass('done');
 		this_action.find('.with-icn b').html(window.sL.favoriteVerb);		
 		this_stream_item.removeClass('favorited');						
+
+		// remove the fav and rq cache for this queet, to avoid number flickering 
+		localStorageObjectCache_STORE('favsAndRequeets',this_stream_item.attr('data-quitter-id'), false);
 
 		// post unfav
 		postActionToAPI('favorites/destroy/' + this_stream_item.attr('data-quitter-id') + '.json', function(data) {
 			if(data) {
 				// success
-				remove_spinner();
 				getFavsAndRequeetsForQueet(this_stream_item, this_stream_item.attr('data-quitter-id'));				
 
 				// mark all instances of this notice as non-favorited
@@ -1577,7 +1877,6 @@ $('body').on('click','.action-fav-container',function(){
 				}
 			else {
 				// error
-				remove_spinner();
 				this_action.children('.with-icn').addClass('done');
 				this_action.find('.with-icn b').html(window.sL.favoritedVerb);		
 				this_stream_item.addClass('favorited');				
@@ -1952,7 +2251,7 @@ $('body').on('mouseup', 'div.syntax-two', function(e){
 	});
 
 // strip html from paste
-function stripHtmlFromPaste(e) {
+function stripHtmlFromPaste(e) {
 	e.preventDefault();
 	var text = replaceHtmlSpecialChars(e.clipboardData.getData("text/plain"));
 	text = text.replace(/\n/g,'<br>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;'); // keep line-breaks and tabs
@@ -1966,19 +2265,9 @@ $('body').on('keyup paste input', 'div.queet-box-syntax', function() {
 	currentVal = currentVal.replace(/<br>$/, '').replace(/&nbsp;$/, '').replace(/ $/, ''); // fix
 	$(this).siblings('.syntax-two').html(currentVal);
 
-	// regexps for syntax highlighting
-	var allDomains = '(ac|ad|aero|af|ag|ai|al|am|an|ao|aq|arpa|asia|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cat|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|com|coop|cr|cu|cv|cw|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|io|iq|ir|is|it|je|jm|jobs|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mp|mq|mr|ms|mt|museum|mv|mw|mx|my|mz|name|nc|net|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|post|pro|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sx|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xxx|ye|yt|za|zm|zw|zone)|(ae|ar|as|bi|co|in|jo|mo|mu|na|ne|pr|tr)'; // needs updating
-	var regexps = Object();
-	regexps.externalMention = XRegExp.cache('(^|\\s|\\.|<br>)(@)[a-zA-Z0-9]+(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');		
-	regexps.mention = /(^|\s|\.|<br>)(@)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;				
-	regexps.tag = XRegExp.cache('(^|\\s|\\.|<br>)(\\#)[\\p{L}\\p{N}\\-\\.]+($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');	
-	regexps.group = /(^|\s|\.|<br>)(\!)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;					
-	regexps.url = /(^|\s|\.|<br>|&nbsp;)(http\:\/\/|https\:\/\/)([\wåäö\-\.]+)?(\.)((ac|ad|aero|af|ag|ai|al|am|an|ao|aq|arpa|asia|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cat|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|com|coop|cr|cu|cv|cw|cx|cy|cz|dev|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|io|iq|ir|is|it|je|jm|jobs|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mp|mq|mr|ms|mt|museum|mv|mw|mx|my|mz|name|nc|net|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|post|pro|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sx|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xxx|ye|yt|za|zm|zw|zone)|(ae|ar|as|bi|co|de|in|jo|mo|mu|na|ne|pr|tr))(\/[\wåäö\%\!\*\'\(\)\;\:\@\&\=\+\$\,\/\?\#\[\]\-\_\.\~]+)?(\/)?($|\s|\,|\:|\-|\<|\!|\?|\&)/;		
-	regexps.urlWithoutProtocol = /(^|\s|\.|<br>|&nbsp;)[\wåäö\-\.]+(\.)((ac|ad|aero|af|ag|ai|al|am|an|ao|aq|arpa|asia|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cat|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|com|coop|cr|cu|cv|cw|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|io|iq|ir|is|it|je|jm|jobs|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mp|mq|mr|ms|mt|museum|mv|mw|mx|my|mz|name|nc|net|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|post|pro|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sx|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xxx|ye|yt|za|zm|zw|zone)|(ae|ar|as|bi|co|in|jo|mo|mu|na|ne|pr|tr))(\/[\wåäö\%\!\*\'\(\)\;\:\@\&\=\+\$\,\/\?\#\[\]\-\_\.\~]+)?(\/)?($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;
-	regexps.email = /(^|\s|\.|<br>)([a-zA-Z0-9\!\#\$\%\&\'\*\+\-\/\=\?\^\_\`\{\|\}\~\.]+)?(@)[\wåäö\-\.]+(\.)((ac|ad|aero|af|ag|ai|al|am|an|ao|aq|arpa|asia|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cat|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|com|coop|cr|cu|cv|cw|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|io|iq|ir|is|it|je|jm|jobs|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mp|mq|mr|ms|mt|museum|mv|mw|mx|my|mz|name|nc|net|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|post|pro|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sx|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xxx|ye|yt|za|zm|zw|zone)|(ae|ar|as|bi|co|in|jo|mo|mu|na|ne|pr|tr))($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;			
 
 	// loop through the regexps and highlight
-	$.each(regexps,function(k,v){
+	$.each(window.syntaxHighlightingRegexps,function(k,v){
 		while(currentVal.match(v)) {
 			var currentMatch = currentVal.match(v);
 			if(currentMatch[0].slice(-1) == '<'
@@ -1998,8 +2287,6 @@ $('body').on('keyup paste input', 'div.queet-box-syntax', function() {
 		
 	$(this).siblings('.syntax-middle').html(currentVal);
 	}); 
-
-
 
 
 /* · 
@@ -2113,13 +2400,36 @@ $('body').on('keyup', 'div.queet-box-syntax', function(e) {
 				var term = match[0].substring(match[0].lastIndexOf('@')+1, match[0].length).toLowerCase();
 				window.lastMention.mentionPos = mentionPos;
 				window.lastMention.cursorPos = cursorPos;				
+
+				
+				// see if anyone we're following matches 
+				var suggestionsToShow = [];
+				var suggestionsUsernameCount = {};
+				suggestionsUsernameCount[window.loggedIn.screen_name] = 1; // any suggestions with the same screen name as mine will get their server url added
 				$.each(window.following,function(){
 					var userregex = new RegExp(term);
 					if(this.username.toLowerCase().match(userregex) || this.name.toLowerCase().match(userregex)) {
-						queetBox.siblings('.mentions-suggestions').append('<div><img height="24" width="24" src="' + this.avatar + '" /><strong>' + this.name + '</strong> @<span>' + this.username + '</span></div>')
+						suggestionsToShow.push({avatar:this.avatar, name:this.name, username:this.username,url:this.url});
+
+						// count the usernames to see if we need to show the server for any of them
+						if(typeof suggestionsUsernameCount[this.username] != 'undefined') {
+							suggestionsUsernameCount[this.username] = suggestionsUsernameCount[this.username] + 1;
+							}
+						else {
+							suggestionsUsernameCount[this.username] = 1;
+							}
 						}
 					});				
-
+				
+				// show matches
+				$.each(suggestionsToShow,function(){
+					var serverHtml = '';
+					if(suggestionsUsernameCount[this.username]>1 && this.url !== false) {
+						serverHtml = '@' + this.url;
+						}
+					queetBox.siblings('.mentions-suggestions').append('<div title="@' + this.username + serverHtml + '"><img height="24" width="24" src="' + this.avatar + '" /><strong>' + this.name + '</strong> @<span>' + this.username + serverHtml + '</span></div>')				
+					});
+				
 				}
 			else {
 				queetBox.siblings('.mentions-suggestions').empty();
@@ -2249,11 +2559,11 @@ $('body').on('click','.edit-profile-button',function(){
 							<div class="profile-banner-footer">\
 							   <div class="color-selection">\
 							      <label for="link-color-selection">' + window.sL.linkColor + '</label>\
-							      <input id="link-color-selection" type="text" value="#' + window.userLinkColor + '" />\
+							      <input id="link-color-selection" type="text" value="#' + window.loggedIn.linkcolor + '" />\
 							   </div>\
 							   <div class="color-selection">\
 							      <label for="link-color-selection">' + window.sL.backgroundColor + '</label>\
-							      <input id="background-color-selection" type="text" value="#' + window.userBackgroundColor + '" />\
+							      <input id="background-color-selection" type="text" value="#' + window.loggedIn.backgroundcolor + '" />\
 							   </div>\
 							   <div class="user-actions">\
 							       <button type="button" class="abort-edit-profile-button"><span class="button-text edit-profile-text">' + window.sL.cancelVerb + '</span>\
@@ -2268,14 +2578,32 @@ $('body').on('click','.edit-profile-button',function(){
 				// save colors on change
 				$('#link-color-selection').minicolors({
 					change: function(hex) {
-						changeLinkColor(hex);
-						postNewLinkColor(hex.substring(1));
+						
+						// pause for 500ms before saving and displaying color changes
+						window.changeToLinkColor = hex;
+						setTimeout(function(){
+							if(hex == window.changeToLinkColor) {
+								changeDesign({linkcolor:hex});
+								postNewLinkColor(hex.substring(1));
+								window.loggedIn.linkcolor = hex.substring(1);								
+								}
+							},500);
+							
 						}
 					});
 				$('#background-color-selection').minicolors({
 					change: function(hex) {
-						$('body').css('background-color',hex);
-						postNewBackgroundColor(hex.substring(1));
+
+						// pause for 500ms before saving and displaying color changes
+						window.changeToBackgroundColor = hex;
+						setTimeout(function(){
+							if(hex == window.changeToBackgroundColor) {
+								changeDesign({backgroundcolor:hex});
+								postNewBackgroundColor(hex.substring(1));
+								window.loggedIn.backgroundcolor = hex.substring(1);								
+								}
+							},500);
+
 						}
 					});
 				// also on keyup in input (minicolors 'change' event does not do this, apparently)
@@ -2450,8 +2778,8 @@ $('body').on('click','.crop-and-save-button',function(){
 						$('.crop-and-save-button').removeAttr('disabled');		
 						$('.crop-and-save-button').removeClass('disabled');
 						cleanUpAfterCropping();
-						$('body').css('background-image','url(\'' + data.url + '\')');
-						window.userBackgroundImage = data.url;
+						changeDesign({backgroundimage:data.url});
+						window.loggedIn.background_image = data.url;
 						}
 					 else {
 						alert('Try again! ' + data.error);
@@ -2587,6 +2915,9 @@ function coverPhotoAndAvatarSelectAndCrop(e, coverOrAvatar) {
 						$('#' + cropId).parent().css('left','50%')
 						$('#' + cropId).parent().css('margin-left','-' + (targetWidth/2) + 'px')
 						$('#' + cropId).parent().siblings('.profile-header-inner').children('div,input,a').css('display','none');
+						
+						// replace the hardcoded "click to drag" string
+						$('#' + cropId).siblings('.jwc_controls').children('span').html(window.sL.clickToDrag);
 						
 						window.jwc = $('#' + cropId).getjWindowCrop();		
 					

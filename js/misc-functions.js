@@ -1,37 +1,42 @@
 
- /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                             Q V I T T E R                                   ·
-  ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
-  ·                                                                             ·
-  ·                                                                             ·
-  ·                                 <o)                                         ·
-  ·                                  /_////                                     ·
-  ·                                 (____/                                      ·
-  ·                                          (o<                                ·
-  ·                                   o> \\\\_\                                 ·
-  ·                                 \\)   \____)                                ·
-  ·                                                                             ·
-  ·                                                                             ·    
-  ·                                                                             ·
-  ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
-  ·  under the  terms of the GNU Affero General Public License as published by  ·
-  ·  the Free Software Foundation,  either version three of the License or (at  ·
-  ·  your option) any later version.                                            ·
-  ·                                                                             ·
-  ·  Qvitter is distributed  in hope that  it will be  useful but  WITHOUT ANY  ·
-  ·  WARRANTY;  without even the implied warranty of MERCHANTABILTY or FITNESS  ·
-  ·  FOR A PARTICULAR PURPOSE.  See the  GNU Affero General Public License for  ·
-  ·  more details.                                                              ·
-  ·                                                                             ·
-  ·  You should have received a copy of the  GNU Affero General Public License  ·
-  ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
-  ·                                                                             ·
-  ·   Contact h@nnesmannerhe.im if you have any questions.                      ·
-  ·                                                                             · 
-  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
+/*· · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
+  ·                                                                               ·
+  ·                                                                               ·
+  ·                             Q V I T T E R                                     ·
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·                                 <o)                                           ·
+  ·                                  /_////                                       ·
+  ·                                 (____/                                        ·
+  ·                                          (o<                                  ·
+  ·                                   o> \\\\_\                                   ·
+  ·                                 \\)   \____)                                  ·  
+  ·                                                                               ·
+  ·                                                                               ·  
+  ·     @licstart  The following is the entire license notice for the             ·
+  ·     JavaScript code in this page.                                             ·
+  ·                                                                               ·
+  ·     Copyright (C) 2015  Hannes Mannerheim and other contributors              ·
+  ·                                                                               ·    
+  ·                                                                               ·
+  ·     This program is free software: you can redistribute it and/or modify      ·
+  ·     it under the terms of the GNU Affero General Public License as            ·
+  ·     published by the Free Software Foundation, either version 3 of the        ·
+  ·     License, or (at your option) any later version.                           ·
+  ·                                                                               ·
+  ·     This program is distributed in the hope that it will be useful,           ·
+  ·     but WITHOUT ANY WARRANTY; without even the implied warranty of            ·
+  ·     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             ·
+  ·     GNU Affero General Public License for more details.                       ·
+  ·                                                                               ·
+  ·     You should have received a copy of the GNU Affero General Public License  ·
+  ·     along with this program.  If not, see <http://www.gnu.org/licenses/>.     ·
+  ·                                                                               ·
+  ·     @licend  The above is the entire license notice                           · 
+  ·     for the JavaScript code in this page.                                     · 
+  ·                                                                               · 
+  · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
+  
 
 
 /* ·  
@@ -211,6 +216,206 @@ function checkLocalStorage() {
 	console.log(corrected + ' entries corrected, ' + deleted + ' entries deleted');	
 	}
 
+
+/* ·  
+   · 
+   ·  Cache the unicode compatible regexps for the syntax highlighting
+   ·       
+   · · · · · · · · · */
+
+function cacheSyntaxHighlighting() {
+
+	// regexps for syntax highlighting
+	var allDomains = '(abb|abbott|abogado|ac|academy|accenture|accountant|accountants|active|actor|ad|ads|adult|ae|aero|af|afl|ag|agency|ai|aig|airforce|al|allfinanz|alsace|am|amsterdam|an|android|ao|apartments|aq|aquarelle|ar|archi|army|arpa|as|asia|associates|at|attorney|au|auction|audio|auto|autos|aw|ax|axa|az|ba|band|bank|bar|barclaycard|barclays|bargains|bauhaus|bayern|bb|bbc|bbva|bd|be|beer|berlin|best|bf|bg|bh|bi|bible|bid|bike|bingo|bio|biz|bj|bl|black|blackfriday|bloomberg|blue|bm|bmw|bn|bnpparibas|bo|boats|bond|boo|boutique|bq|br|bridgestone|broker|brother|brussels|bs|bt|budapest|build|builders|business|buzz|bv|bw|by|bz|bzh|ca|cab|cafe|cal|camera|camp|cancerresearch|canon|capetown|capital|caravan|cards|care|career|careers|cars|cartier|casa|cash|casino|cat|catering|cbn|cc|cd|center|ceo|cern|cf|cfa|cfd|cg|ch|channel|chat|cheap|chloe|christmas|chrome|church|ci|cisco|citic|city|ck|cl|claims|cleaning|click|clinic|clothing|club|cm|cn|co|coach|codes|coffee|college|cologne|com|community|company|computer|condos|construction|consulting|contractors|cooking|cool|coop|corsica|country|coupons|courses|cr|credit|creditcard|cricket|crs|cruises|cu|cuisinella|cv|cw|cx|cy|cymru|cyou|cz|dabur|dad|dance|date|dating|datsun|day|dclk|de|deals|degree|delivery|democrat|dental|dentist|desi|design|dev|diamonds|diet|digital|direct|directory|discount|dj|dk|dm|dnp|do|docs|dog|doha|domains|doosan|download|durban|dvag|dz|earth|eat|ec|edu|education|ee|eg|eh|email|emerck|energy|engineer|engineering|enterprises|epson|equipment|er|erni|es|esq|estate|et|eu|eurovision|eus|events|everbank|exchange|expert|exposed|express|fail|faith|fan|fans|farm|fashion|feedback|fi|film|finance|financial|firmdale|fish|fishing|fit|fitness|fj|fk|flights|florist|flowers|flsmidth|fly|fm|fo|foo|football|forex|forsale|foundation|fr|frl|frogans|fund|furniture|futbol|fyi|ga|gal|gallery|garden|gb|gbiz|gd|gdn|ge|gent|gf|gg|ggee|gh|gi|gift|gifts|gives|gl|glass|gle|global|globo|gm|gmail|gmo|gmx|gn|gold|goldpoint|golf|goo|goog|google|gop|gov|gp|gq|gr|graphics|gratis|green|gripe|gs|gt|gu|guge|guide|guitars|guru|gw|gy|hamburg|hangout|haus|healthcare|help|here|hermes|hiphop|hitachi|hiv|hk|hm|hn|hockey|holdings|holiday|homedepot|homes|honda|horse|host|hosting|house|how|hr|ht|hu|ibm|icbc|icu|id|ie|ifm|il|im|immo|immobilien|in|industries|infiniti|info|ing|ink|institute|insure|int|international|investments|io|iq|ir|irish|is|it|iwc|java|jcb|je|jetzt|jewelry|jll|jm|jo|jobs|joburg|jp|juegos|kaufen|kddi|ke|kg|kh|ki|kim|kitchen|kiwi|km|kn|koeln|komatsu|kp|kr|krd|kred|kw|ky|kyoto|kz|la|lacaixa|land|lat|latrobe|lawyer|lb|lc|lds|lease|leclerc|legal|lgbt|li|liaison|lidl|life|lighting|limited|limo|link|lk|loan|loans|lol|london|lotte|lotto|love|lr|ls|lt|ltda|lu|lupin|luxe|luxury|lv|ly|ma|madrid|maif|maison|management|mango|market|marketing|markets|marriott|mba|mc|md|me|media|meet|melbourne|meme|memorial|men|menu|mf|mg|mh|miami|mil|mini|mk|ml|mm|mma|mn|mo|mobi|moda|moe|monash|money|montblanc|mormon|mortgage|moscow|motorcycles|mov|movie|mp|mq|mr|ms|mt|mtn|mtpc|mu|museum|mv|mw|mx|my|mz|na|nadex|nagoya|name|navy|nc|ne|nec|net|network|neustar|new|news|nexus|nf|ng|ngo|nhk|ni|nico|ninja|nissan|nl|no|np|nr|nra|nrw|ntt|nu|nyc|nz|okinawa|om|one|ong|onl|online|ooo|org|organic|osaka|otsuka|ovh|pa|page|panerai|paris|partners|parts|party|pe|pf|pg|ph|pharmacy|philips|photo|photography|photos|physio|piaget|pics|pictet|pictures|pink|pizza|pk|pl|place|plumbing|plus|pm|pn|pohl|poker|porn|post|pr|praxi|press|pro|prod|productions|prof|properties|property|ps|pt|pub|pw|py|qa|qpon|quebec|racing|re|realtor|recipes|red|redstone|rehab|reise|reisen|reit|ren|rent|rentals|repair|report|republican|rest|restaurant|review|reviews|rich|rio|rip|ro|rocks|rodeo|rs|rsvp|ru|ruhr|run|rw|ryukyu|sa|saarland|sale|samsung|sandvik|sandvikcoromant|sap|sarl|saxo|sb|sc|sca|scb|schmidt|scholarships|school|schule|schwarz|science|scot|sd|se|seat|sener|services|sew|sex|sexy|sg|sh|shiksha|shoes|show|shriram|si|singles|site|sj|sk|ski|sky|sl|sm|sn|sncf|so|soccer|social|software|sohu|solar|solutions|sony|soy|space|spiegel|spreadbetting|sr|ss|st|study|style|su|sucks|supplies|supply|support|surf|surgery|suzuki|sv|swiss|sx|sy|sydney|systems|sz|taipei|tatar|tattoo|tax|taxi|tc|td|team|tech|technology|tel|temasek|tennis|tf|tg|th|thd|theater|tickets|tienda|tips|tires|tirol|tj|tk|tl|tm|tn|to|today|tokyo|tools|top|toray|toshiba|tours|town|toys|tp|tr|trade|trading|training|travel|trust|tt|tui|tv|tw|tz|ua|ug|uk|um|university|uno|uol|us|uy|uz|va|vacations|vc|ve|vegas|ventures|versicherung|vet|vg|vi|viajes|video|villas|vision|vlaanderen|vn|vodka|vote|voting|voto|voyage|vu|wales|walter|wang|watch|webcam|website|wed|wedding|weir|wf|whoswho|wien|wiki|williamhill|win|wme|work|works|world|ws|wtc|wtf|xbox|xerox|xin|测试|परीक्षा|佛山|慈善|集团|在线|한국|ভারত|八卦|موقع|বাংলা|公益|公司|移动|我爱你|москва|испытание|қаз|онлайн|сайт|срб|бел|时尚|테스트|淡马锡|орг|삼성|சிங்கப்பூர்|商标|商店|商城|дети|мкд|טעסט|工行|中文网|中信|中国|中國|娱乐|谷歌|భారత్|ලංකා|測試|ભારત|भारत|آزمایشی|பரிட்சை|网店|संगठन|餐厅|网络|укр|香港|δοκιμή|飞利浦|إختبار|台湾|台灣|手机|мон|الجزائر|عمان|ایران|امارات|بازار|پاکستان|الاردن|بھارت|المغرب|السعودية|سودان|عراق|مليسيا|澳門|政府|شبكة|გე|机构|组织机构|健康|ไทย|سورية|рус|рф|تونس|みんな|グーグル|ελ|世界|ਭਾਰਤ|网址|游戏|vermögensberater|vermögensberatung|企业|信息|مصر|قطر|广东|இலங்கை|இந்தியா|հայ|新加坡|فلسطين|テスト|政务|xxx|xyz|yachts|yandex|ye|yodobashi|yoga|yokohama|youtube|yt|za|zip|zm|zone|zuerich|zw|oracle|xn--1qqw23a|xn--30rr7y|xn--3bst00m|xn--3ds443g|xn--3e0b707e|xn--45brj9c|xn--45q11c|xn--4gbrim|xn--55qw42g|xn--55qx5d|xn--6frz82g|xn--6qq986b3xl|xn--80adxhks|xn--80ao21a|xn--80asehdb|xn--80aswg|xn--90a3ac|xn--90ais|xn--9et52u|xn--b4w605ferd|xn--c1avg|xn--cg4bki|xn--clchc0ea0b2g2a9gcd|xn--czr694b|xn--czrs0t|xn--czru2d|xn--d1acj3b|xn--d1alf|xn--estv75g|xn--fiq228c5hs|xn--fiq64b|xn--fiqs8s|xn--fiqz9s|xn--fjq720a|xn--flw351e|xn--fpcrj9c3d|xn--fzc2c9e2c|xn--gecrj9c|xn--h2brj9c|xn--hxt814e|xn--i1b6b1a6a2e|xn--imr513n|xn--io0a7i|xn--j1amh|xn--j6w193g|xn--kcrx77d1x4a|xn--kprw13d|xn--kpry57d|xn--kput3i|xn--l1acc|xn--lgbbat1ad8j|xn--mgb9awbf|xn--mgba3a4f16a|xn--mgbaam7a8h|xn--mgbab2bd|xn--mgbayh7gpa|xn--mgbbh1a71e|xn--mgbc0a9azcg|xn--mgberp4a5d4ar|xn--mgbpl2fh|xn--mgbx4cd0ab|xn--mxtq1m|xn--ngbc5azd|xn--node|xn--nqv7f|xn--nqv7fs00ema|xn--nyqy26a|xn--o3cw4h|xn--ogbpf8fl|xn--p1acf|xn--p1ai|xn--pgbs0dh|xn--q9jyb4c|xn--qcka1pmc|xn--rhqv96g|xn--s9brj9c|xn--ses554g|xn--unup4y|xn--vermgensberater-ctb|xn--vermgensberatung-pwb|xn--vhquv|xn--vuq861b|xn--wgbh1c|xn--wgbl6a|xn--xhq521b|xn--xkc2al3hye2a|xn--xkc2dl3a5ee0h|xn--y9a3aq|xn--yfro4i67o|xn--ygbi2ammx|xn--zfr164b)';
+	window.syntaxHighlightingRegexps = Object();
+	window.syntaxHighlightingRegexps.externalMention = XRegExp.cache('(^|\\s|\\.|<br>)(@)[a-zA-Z0-9]+(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');		
+	window.syntaxHighlightingRegexps.mention = /(^|\s|\.|<br>)(@)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;				
+	window.syntaxHighlightingRegexps.tag = XRegExp.cache('(^|\\s|\\.|<br>)(\\#)[\\p{L}\\p{N}\\-\\.]+($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');	
+	window.syntaxHighlightingRegexps.group = /(^|\s|\.|<br>)(\!)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;					
+	window.syntaxHighlightingRegexps.url = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;)(http\\:\\/\\/|https\:\\/\\/)([\\p{L}\\p{N}\\-\\.]+)?(\\.)(' + allDomains + ')(\\/[\\p{L}\\p{N}\\%\\!\\*\\\'\\(\\)\\;\\:\\@\\&\\=\\+\\$\\,\\/\\?\\#\\[\\]\\-\\_\\.\\~]+)?(\\/)?($|\\s|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
+	window.syntaxHighlightingRegexps.urlWithoutProtocol = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')(\\/[\\p{L}\\p{N}\\%\\!\\*\\\'\\(\\)\\;\\:\\@\\&\\=\\+\\$\\,\\/\\?\\#\\[\\]\\-\\_\\.\\~]+)?(\\/)?($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
+	window.syntaxHighlightingRegexps.email = XRegExp.cache('(^|\\s|\\.|<br>)([a-zA-Z0-9\\!\\#\\$\\%\\&\\\'\\*\\+\\-\\/\\=\\?\\^\\_\\`\\{\\|\\}\\~\\.]+)?(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');				
+	}
+
+
+/* ·  
+   · 
+   ·  User array cache
+   ·  
+   ·  Stored in window.userArrayCache as instance_url/nickname
+   ·  with protocol (http:// or https://) trimmed off, e.g. "quitter.se/hannes2peer"
+   ·       
+   · · · · · · · · · */
+
+window.userArrayCache = new Object();
+
+function userArrayCacheStore(data) {
+
+	if(typeof data == 'undefined') {
+		return false;
+		}
+	
+	// if we are passed a data object with both local and external data, use external data as key
+	if(typeof data.local != 'undefined' 
+	&& typeof data.local.statusnet_profile_url != 'undefined' 
+	&& typeof data.external != 'undefined' 
+	&& typeof data.external.statusnet_profile_url != 'undefined') {
+		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.external.statusnet_profile_url, data.external.screen_name);
+		var key = instanceUrlWithoutProtocol + '/' + data.external.screen_name;		
+		var dataToStore = data;
+		}
+	// we can also get either local...
+	else if(typeof data.local != 'undefined' && typeof data.local.statusnet_profile_url != 'undefined' ) {
+		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.local.statusnet_profile_url, data.external.screen_name);
+		var key = instanceUrlWithoutProtocol + '/' + data.external.screen_name;		
+		data.external = false;
+		var dataToStore = data;
+		}
+	// ...or external...
+	else if(typeof data.external != 'undefined' && typeof data.external.statusnet_profile_url != 'undefined' ) {
+		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.external.statusnet_profile_url, data.external.screen_name);
+		var key = instanceUrlWithoutProtocol + '/' + data.external.screen_name;				
+		data.local = false;
+		var dataToStore = data;
+		}
+	// ...or an unspecified data object, in which case we check the avatar urls to see if it's local or external
+	else if (typeof data.statusnet_profile_url != 'undefined') {
+		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.statusnet_profile_url, data.screen_name);
+		var key = instanceUrlWithoutProtocol + '/' + data.screen_name;				
+		
+		var dataProfileImageUrlWithoutProtocol = removeProtocolFromUrl(data.profile_image_url);
+		var siteInstanceURLWithoutProtocol = removeProtocolFromUrl(window.siteInstanceURL);
+		
+		// local
+		if(dataProfileImageUrlWithoutProtocol.substring(0,siteInstanceURLWithoutProtocol.length) == siteInstanceURLWithoutProtocol){
+			var dataToStore = {local:data,external:false};
+			}
+		// external
+		else {
+			var dataToStore = {external:data,local:false};			
+			}
+		}
+	else {
+		return false;
+		}
+	
+	// store
+	if(typeof window.userArrayCache[key] == 'undefined') {
+		window.userArrayCache[key] = dataToStore;		
+		}
+	else {
+		if(dataToStore.local) {
+			
+			// keep old status if newer data doesn't have any
+			if(typeof dataToStore.local.status == 'undefined' && typeof window.userArrayCache[key].local.status != 'undefined') {
+				dataToStore.local.status = window.userArrayCache[key].local.status;
+				}
+			
+			window.userArrayCache[key].local = dataToStore.local;					
+			}
+		if(dataToStore.external) {
+			window.userArrayCache[key].external = dataToStore.external;					
+			}		
+		}
+	}
+	
+function userArrayCacheGetByLocalNickname(localNickname) {
+	if(typeof window.userArrayCache[window.siteRootDomain + '/' + localNickname] != 'undefined') {
+		return window.userArrayCache[window.siteRootDomain + '/' + localNickname];
+		}
+	else {
+		return false;
+		}
+	}
+	
+function userArrayCacheGetByProfileUrlAndNickname(profileUrl, nickname) {
+	var guessedInstanceUrl = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(profileUrl, nickname);
+	if(typeof window.userArrayCache[guessedInstanceUrl + '/' + nickname] == 'undefined') {
+		return false;
+		}
+	else {
+		return window.userArrayCache[guessedInstanceUrl + '/' + nickname];
+		}
+	}	
+
+
+
+/* ·  
+   · 
+   ·  Guess instance's base installation url without protocol from a profile url
+   · 
+   · · · · · · · · · */
+
+function guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(profileUrl, nickname) {
+
+	// remove protocol
+	var guessedInstanceUrl = removeProtocolFromUrl(profileUrl)
+
+	// user/id-style profile urls
+	if(guessedInstanceUrl.indexOf('/user/') > -1 &&
+	   $.isNumeric(guessedInstanceUrl.substring(guessedInstanceUrl.lastIndexOf('/user/')+6))) {		
+		guessedInstanceUrl = guessedInstanceUrl.substring(0,guessedInstanceUrl.lastIndexOf('/user/'));
+		}
+	
+	// nickname-style profile urls
+	else if(guessedInstanceUrl.substring(guessedInstanceUrl.lastIndexOf('/')+1) == nickname) {
+		guessedInstanceUrl = guessedInstanceUrl.substring(0,guessedInstanceUrl.lastIndexOf('/'));
+		}
+	
+	// remove trailing "index.php" if the instance doesn't use mod_rewrite
+	if(guessedInstanceUrl.substring(guessedInstanceUrl.lastIndexOf('/')) == '/index.php') {
+		guessedInstanceUrl = guessedInstanceUrl.substring(0,guessedInstanceUrl.lastIndexOf('/'));		
+		}	
+
+	// there was a bug once that made some instances have multiple /:s in their url,
+	// so make sure there's no trailing /:s
+	while (guessedInstanceUrl.slice(-1) == '/') {
+		guessedInstanceUrl = guessedInstanceUrl.slice(0,-1);
+		}
+
+	return guessedInstanceUrl;
+	}
+    
+
+
+/* ·  
+   · 
+   ·  Remove the protocol (e.g. "http://") from an URL
+   · 
+   · · · · · · · · · */
+
+function removeProtocolFromUrl(url) {
+	if(url.indexOf('://') == -1) {
+		return url;
+		}
+	return url.substring(url.indexOf('://')+3);
+	}
+
+
+
+/* · 
+   · 
+   ·   Iterates recursively through an API response in search for user data to cache
+   ·   If we find a "statusnet_profile_url" key we assume the parent is a user array/object   
+   ·   
+   · · · · · · · · · · · · · */ 
+
+
+function searchForUserDataToCache(obj) {
+	for (var property in obj) {
+		if (obj.hasOwnProperty(property)) {
+			if (typeof obj[property] == "object") {
+				searchForUserDataToCache(obj[property]);
+				}
+			else if(typeof obj[property] == 'string' && property == 'statusnet_profile_url') {
+				userArrayCacheStore(obj);
+				}
+			}
+		}  
+	}
+
+
+
 /* ·  
    · 
    ·  Display unread notifications
@@ -279,10 +484,8 @@ function iterateRecursiveReplaceHtmlSpecialChars(obj) {
 			if (typeof obj[property] == "object") {
 				iterateRecursiveReplaceHtmlSpecialChars(obj[property]);
 				}
-			else {
-				if(typeof obj[property] == 'string' && property != 'statusnet_html' && property != 'source') {
-					obj[property] = replaceHtmlSpecialChars(obj[property]);
-					}
+			else if(typeof obj[property] == 'string' && property != 'statusnet_html' && property != 'source') {
+				obj[property] = replaceHtmlSpecialChars(obj[property]);
 				}
 			}
 		}
@@ -398,118 +601,143 @@ function validateEditProfileForm(o) {
 		
 	return allFieldsValid;
 	}	
-    
+
+
+/* ·  
+   · 
+   ·   Validate a hex color and add # if missing
+   · 
+   ·   @returns hex color with # or false
+   ·
+   · · · · · · · · · */ 
+
+function isValidHexColor(maybeValidHexColor) {
+	
+	if(maybeValidHexColor.substring(0,1) != '#') {
+		maybeValidHexColor = '#' + maybeValidHexColor;
+		}
+	
+	var validHexColor  = /(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(maybeValidHexColor);
+	if(validHexColor) {
+		validHexColor = maybeValidHexColor;
+		}
+	return validHexColor;
+	}
+
 
     
 /* ·  
    · 
    ·   Change profile design
    ·
-   ·   @param obj: user object that _might_ contain colors, or window object, that _might_ contain user settings 
+   ·   @param obj: user object that should contain one, two or all of backgroundimage, backgroundcolor and linkcolor
+   ·               false or empty string unsets the parameter to default
    · 
    · · · · · · · · · */  
 
 function changeDesign(obj) {
 	
-	// user object that might contains other user's colors
-	if(typeof obj.linkcolor != 'undefined' &&
-       typeof obj.backgroundcolor != 'undefined') {
-		if(obj.linkcolor == null) {
-			changeLinkColor(window.defaultLinkColor);
+	// if we're logged out and this is the front page, we use the default design
+	if(!window.loggedIn && window.currentStream == 'statuses/public_timeline.json') {
+		obj.backgroundimage = window.fullUrlToThisQvitterApp + window.siteBackground;
+		obj.backgroundcolor = window.defaultBackgroundColor;
+		obj.linkcolor = window.defaultLinkColor;
+		}
+		
+	
+	// if no object is defined, abort
+	if(typeof obj == 'undefined') {
+		return false;
+		}	
+		
+	// remember the design for this stream
+	if(typeof window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)] == 'undefined') {
+		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)] = new Object();
+		}
+	
+	// change design elements
+	if(typeof obj.backgroundimage != 'undefined') {		
+		if(obj.backgroundimage === false || obj.backgroundimage == '') {
+			$('body').css('background-image','url(\'\')');
 			}
-		else if(obj.linkcolor.length == 6) {
-			changeLinkColor('#' + obj.linkcolor);
+		else if(obj.backgroundimage.length > 4) {
+			$('body').css('background-image','url(\'' + obj.backgroundimage + '\')');			
 			}
-		else {
-			changeLinkColor(window.defaultLinkColor);
-			}	
-		if(obj.backgroundcolor == null) {
-			$('body').css('background-color',window.defaultBackgroundColor);
-			}							   
-		else if(obj.backgroundcolor.length == 6) {
-			$('body').css('background-color','#' + obj.backgroundcolor);
+		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)].backgroundimage = obj.backgroundimage;			
+		}		
+	if(typeof obj.backgroundcolor != 'undefined') {
+		if(obj.backgroundcolor === false || obj.backgroundcolor == '') {
+			obj.backgroundcolor = window.defaultBackgroundColor;
 			}
-		else {
-			$('body').css('background-color',window.defaultBackgroundColor);
-			}				
-
-	  	// background image
-	  	if(typeof obj.background_image != 'undefined' && obj.background_image.length > 0) {
-		  	$('body').css('background-image','url(\'' + obj.background_image + '\')');
-	  		}
-	  	else {
-	  		$('body').css('background-image','url(\'\')');
-	  		}	  						   
-	   }
-	   
-	  // window object that might contain my colors
-	  else if(typeof obj.userLinkColor != 'undefined' &&
-              typeof obj.userBackgroundColor != 'undefined') {
-		if(obj.userLinkColor == null) {
-			changeLinkColor(window.defaultLinkColor);
+		changeBackgroundColor(obj.backgroundcolor);
+		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)].backgroundcolor = obj.backgroundcolor;	
+		}
+	if(typeof obj.linkcolor != 'undefined') {
+		if(obj.linkcolor === false || obj.linkcolor == '') {
 			obj.linkcolor = window.defaultLinkColor;
 			}
-		else if(obj.userLinkColor.length == 6) {
-			changeLinkColor('#' + obj.userLinkColor);
-			obj.linkcolor = obj.userLinkColor;
-			}
-		else {
-			changeLinkColor(window.defaultLinkColor);
-			}	
-		if(obj.userBackgroundColor == null) {
-			$('body').css('background-color',window.defaultBackgroundColor);
-			obj.backgroundcolor = window.defaultBackgroundColor;
-			}
-		else if(obj.userBackgroundColor.length == 6) {
-			$('body').css('background-color','#' + obj.userBackgroundColor);
-			obj.backgroundcolor = obj.userBackgroundColor;
-			}
-		else {
-			$('body').css('background-color',window.defaultBackgroundColor);
-			obj.backgroundcolor = window.defaultBackgroundColor;
-			}		  	
-
-	  	// background image
-	  	if(obj.userBackgroundImage.length > 0) {
-		  	$('body').css('background-image','url(\'' + obj.userBackgroundImage + '\')');
-		  	obj.background_image = obj.userBackgroundImage;
-	  		}
-	  	else {
-	  		$('body').css('background-image','url(\'\')');
-	  		}
-	  	}
-	  	
-	// remember the design for this stream
-	window.oldStreamsDesigns[window.currentStream] = {backgroundcolor:obj.backgroundcolor, linkcolor:obj.linkcolor, background_image:obj.background_image};		  	
+		changeLinkColor(obj.linkcolor);
+		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)].linkcolor = obj.linkcolor;
+		}
 	}
 
 // create object to remember designs on page load
 window.oldStreamsDesigns = new Object();
-    
-    
+
+
+/* ·  
+   · 
+   ·   Change background color
+   ·
+   ·   @param newLinkColor: hex value with or without #
+   · 
+   · · · · · · · · · */  
+
+function changeBackgroundColor(newBackgroundColor) {
+
+	// check hex value
+	var validHexColor = isValidHexColor(newBackgroundColor);
+	if(!validHexColor) {
+		console.log('invalid hex value for backgroundcolor: ' + newBackgroundColor);
+		return false;
+		}
+	
+	$('body').css('background-color',validHexColor);	
+	}
+
     
 /* ·  
    · 
    ·   Change link color
    ·
-   ·   @param newLinkColor: hex value with #
+   ·   @param newLinkColor: hex value with or without #
    · 
    · · · · · · · · · */  
 
 function changeLinkColor(newLinkColor) {
-	var headStyle = $('head').children('style');
-	var linkstyle = headStyle.text();
-	headStyle.text(linkstyle.substring(0,linkstyle.indexOf('color:')+6) + newLinkColor + linkstyle.substring(linkstyle.indexOf(';/*COLOREND*/')));
-	var linkstyle = headStyle.html();
-	headStyle.text(linkstyle.substring(0,linkstyle.indexOf('background-color:')+17) + newLinkColor + linkstyle.substring(linkstyle.indexOf(';/*BACKGROUNDCOLOREND*/')));		
-	var linkstyle = headStyle.html();
-	headStyle.text(linkstyle.substring(0,linkstyle.indexOf('border-color:')+13) + newLinkColor + linkstyle.substring(linkstyle.indexOf(';/*BORDERCOLOREND*/')));		
-	var linkstyle = headStyle.html();
-	headStyle.text(linkstyle.substring(0,linkstyle.indexOf('background-color:rgb(')+17) + blendRGBColors(hex2rgb(newLinkColor),'rgb(255,255,255)',0.8) + linkstyle.substring(linkstyle.indexOf(';/*LIGHTERBACKGROUNDCOLOREND*/')));		
-	var linkstyle = headStyle.html();
-	headStyle.text(linkstyle.substring(0,linkstyle.indexOf('border-color:rgb(')+13) + blendRGBColors(hex2rgb(newLinkColor),'rgb(255,255,255)',0.6) + linkstyle.substring(linkstyle.indexOf(';/*LIGHTERBORDERCOLOREND*/')));		
-	var linkstyle = headStyle.html();
-	headStyle.text(linkstyle.substring(0,linkstyle.indexOf('border-bottom-color:rgb(')+20) + blendRGBColors(hex2rgb(newLinkColor),'rgb(255,255,255)',0.8) + linkstyle.substring(linkstyle.indexOf(';/*LIGHTERBORDERBOTTOMCOLOREND*/')));		
+
+	// check hex value
+	var validHexColor = isValidHexColor(newLinkColor);
+	if(!validHexColor) {
+		console.log('invalid hex value for linkcolor: ' + newLinkColor);
+		return false;
+		}
+	
+	var lighterColor08 = blendRGBColors(hex2rgb(validHexColor),'rgb(255,255,255)',0.8);
+	var lighterColor06 = blendRGBColors(hex2rgb(validHexColor),'rgb(255,255,255)',0.6)
+	
+	var headStyle = $('#dynamic-styles').children('style');
+	var headStyleText = headStyle.text();
+	headStyleText = replaceFromStringEndToStringStart(headStyleText,'/*COLORSTART*/','/*COLOREND*/',validHexColor);
+	headStyleText = replaceFromStringEndToStringStart(headStyleText,'/*BACKGROUNDCOLORSTART*/','/*BACKGROUNDCOLOREND*/',validHexColor);
+	headStyleText = replaceFromStringEndToStringStart(headStyleText,'/*BORDERCOLORSTART*/','/*BORDERCOLOREND*/',validHexColor);
+	headStyleText = replaceFromStringEndToStringStart(headStyleText,'/*LIGHTERBACKGROUNDCOLORSTART*/','/*LIGHTERBACKGROUNDCOLOREND*/',lighterColor08);
+	headStyleText = replaceFromStringEndToStringStart(headStyleText,'/*LIGHTERBORDERCOLORSTART*/','/*LIGHTERBORDERCOLOREND*/',lighterColor06);
+	headStyleText = replaceFromStringEndToStringStart(headStyleText,'/*LIGHTERBORDERBOTTOMCOLORSTART*/','/*LIGHTERBORDERBOTTOMCOLOREND*/',lighterColor08);				
+	headStyle.text(headStyleText);
+	}
+function replaceFromStringEndToStringStart(string,fromStringEnd,toStringStart,withString) {
+	return string.substring(0,string.indexOf(fromStringEnd)+fromStringEnd.length) + withString + string.substring(string.indexOf(toStringStart));			
 	}
 function blendRGBColors(c0, c1, p) {
     var f=c0.split(","),t=c1.split(","),R=parseInt(f[0].slice(4)),G=parseInt(f[1]),B=parseInt(f[2]);
@@ -556,13 +784,24 @@ function detectRTL(s) {
 		if(rtlDirCheck.test(RTLorLTR[i])) { RTLnum++; }
 		else { LTRnum++; }
 		} 
+
     // if there are more rtl chars than ltr
-    if(RTLnum > LTRnum) { $streamItem.children('.stream-item').children('.queet').addClass('rtl'); }
-    // if no chars (that we are interested, but body is set to rtl)
-    else if ($queetText.html().length==0 && $('body').hasClass('rtl')) {
+    // or if no chars (that we are interested, but body is set to rtl)
+    if(RTLnum > LTRnum
+    || ($queetText.html().length==0 && $('body').hasClass('rtl'))) {
     	$streamItem.children('.stream-item').children('.queet').addClass('rtl');
-    	}	    	    	    	
-	return $streamItem.html().replace(/@<a/gi,'<a').replace(/!<a/gi,'<a').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">'); // hacky way to get @#! into mention tags to stop bidirection (css sets an @ with before content method)
+    	}
+    else {
+		// for ltr languages we move @, ! and # to inside
+    	$streamItem.find('.queet-text').find('.h-card.mention').prepend('@');
+    	$streamItem.find('.queet-text').find('.h-card.group').prepend('!');
+    	$streamItem.find('.queet-text').find('.vcard .nickname.mention').prepend('@'); // old style
+    	$streamItem.find('.queet-text').find('.vcard .nickname.group').prepend('!'); // old style   	  
+    	$streamItem.find('.queet-text').find('a[rel="tag"]').prepend('#');    	  	    	
+    	}
+
+	// we remove @, ! and #, they are added as pseudo elements, or have been moved to the inside
+   	return $streamItem.html().replace(/@<a/gi,'<a').replace(/!<a/gi,'<a').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">');    	    
 	}
 	
 function secondsToTime(s){
@@ -1156,3 +1395,49 @@ function shortenUrlsInBox(shortenButton) {
                 });
 }
 
+<<<<<<< HEAD
+=======
+			if(typeof data.shorturl != 'undefined') {
+				
+				shortenButton.closest('.queet-toolbar').siblings('.upload-image-container').children('img[data-shorturl="' + data.url.url + '"]').attr('data-shorturl',data.shorturl);
+				shortenButton.parent().parent().siblings('.queet-box-syntax').html(shortenButton.parent().parent().siblings('.queet-box-syntax').html().replace($('<div/>').text(data.url.url).html(), data.shorturl));
+				shortenButton.parent().parent().siblings('.queet-box-syntax').trigger('keyup');
+				shortenButton.addClass('disabled'); // make sure the button is disabled right after
+				}
+			remove_spinner();
+			}});
+		});
+}
+
+/* · 
+   ·     
+   ·   Return the user screen name that this stream belongs to. last resort just return the stream
+   ·     
+   · · · · · · · · · · · · · */ 
+
+function theUserOrGroupThisStreamBelongsTo(stream) {
+	// if screen_name is given as get-var, use that
+	if(stream.indexOf('screen_name=')>-1) {
+		var thisUsersScreenName = stream.substring(stream.indexOf('screen_name=')+12);
+		if(thisUsersScreenName.indexOf('&=')>-1) {
+			thisUsersScreenName = thisUsersScreenName.substring(0,stream.indexOf('&'));			
+			}
+		return thisUsersScreenName;
+		}
+	// 	groups
+	else if(stream.indexOf('statusnet/groups/timeline/')>-1
+	     || stream.indexOf('statusnet/groups/membership/')>-1
+	     || stream.indexOf('statusnet/groups/admins/')>-1) {
+		var groupName = '!' + stream.substring(stream.lastIndexOf('/')+1, stream.indexOf('.json'));				     	     
+		return groupName;
+		}
+	// otherwise, and if we're logged in, we assume this is my stream		
+	else if (window.loggedIn){
+		return window.loggedIn.screen_name;
+		}
+	else {
+		return stream;
+		}
+	}
+	
+>>>>>>> e3da8af8e2fb824d357ade136ecb1e31b307201c

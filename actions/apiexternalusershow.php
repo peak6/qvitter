@@ -46,65 +46,99 @@ class ApiExternalUserShowAction extends ApiPrivateAuthAction
     {
         parent::prepare($args);
 
-        $profileurl = urldecode($this->arg('profileurl'));        
+        $profileurl = urldecode($this->arg('profileurl'));
+        $nickname = urldecode($this->arg('nickname'));
 
-		// if this is an instance/user/1234 type url, try to find real profile url 
+		$this->profile = new stdClass(); 
+		$this->profile->external = null;
+		$this->profile->local = null;		
+        
+		// we can get urls of two types of urls 	(1) ://instance/nickname
+		//						    				(2) ://instance/user/1234 	
+		//
+		// in case (1) we have the problem that the html can be outdated,
+		// i.e. the user can have changed her nickname. we also have no idea
+		// if it is a multi or single user instance, which forces us to 
+		// guess the api root url. 
+		//
+		// in case (2) we have another problem: we can't use that url to find 
+		// the local profile for the external user, we need url:s of type (2)
+		// for that. so we have to try getting the nickname from the external
+		// instance first
+
+
+		// case (2)	
 		if(strstr($profileurl, '/user/')) {
 
-			$redrected_profileurl = $this->getRedirectUrl($profileurl);
-            if (!empty($redrected_profileurl)) {
-				$profileurl = $redrected_profileurl;
+			$external_user_id = substr($profileurl,strpos($profileurl,'/user/')+6);
+			$external_instance_url = substr($profileurl,0,strpos($profileurl,'/user/')+1);
+
+			if(!is_numeric($external_user_id)) {
+				return true;				
+				}
+
+			$external_profile = $this->getProfileFromExternalInstance($external_instance_url,$external_user_id);
+
+			if(!isset($external_profile->statusnet_profile_url)) {
+				return true;									
+				}
+
+			$this->profile->external = $external_profile;												
+			$local_profile = Profile::getKV('profileurl',$external_profile->statusnet_profile_url);
+
+			if(!$local_profile instanceof Profile) {
+				return true;	
+				}	
+
+			$this->profile->local = $this->twitterUserArray($local_profile);
+			return true;
 			}
-			
-		}
 		
-		// get local profile
+		// case (1)
 		$local_profile = Profile::getKV('profileurl',$profileurl);
 
-		$this->profile = new stdClass();
+		if($local_profile instanceof Profile) {
 
-		if($local_profile) {
-			$this->profile->local = $this->twitterUserArray($local_profile);
-
-			$username = $this->profile->local['screen_name'];	
-			
 			// if profile url is not ending with nickname, this is probably a single user instance
-			if(!substr($profileurl, -strlen($username))===$username) {
-				$instanceurl = $profileurl;
+			if(!substr($local_profile->profileurl, -strlen($local_profile->nickname))===$local_profile->nickname) {
+				$external_instance_url = $local_profile->profileurl;
 				}
-
 			// multi user instance
 			else {			
-				$instanceurl = substr($profileurl, 0, strrpos($profileurl, '/'));				
-				}			
-			
+				$external_instance_url = substr($local_profile->profileurl, 0, strrpos($local_profile->profileurl, '/'));				
+				}	
+
+			$external_profile = $this->getProfileFromExternalInstance($external_instance_url,$local_profile->nickname);
+
+			if(!isset($external_profile->statusnet_profile_url)) {
+				return true;									
+				}						
+
+			$this->profile->external = $external_profile;
+			$this->profile->local = $this->twitterUserArray($local_profile);
+			return true;
 			}
 		
-		// we don't know this user
+		// if we don't know about this user, or the user has changed nickname
+		// if profile url ends with '/' this is probably an unknown single user instance
+		if(substr($profileurl, -1)==='/') {
+			$instanceurl = $profileurl;
+			$user_id_or_nickname = 1;
+			}
+
+		// multi user instance
 		else {
-			
-			// if profile url ends with '/' this is probably an unknown single user instance
-			if(substr($profileurl, -1)==='/') {
-				$instanceurl = $profileurl;
-				$username = 1;		
-				}
-
-			// multi user instance
-			else {
-				$username = substr($profileurl, strrpos($profileurl, '/')+1);			
-				$instanceurl = substr($profileurl, 0, strrpos($profileurl, '/'));											
-				}			
-			
-			}
+			$user_id_or_nickname = substr($profileurl, strrpos($profileurl, '/')+1);			
+			$instanceurl = substr($profileurl, 0, strrpos($profileurl, '/'));											
+			}			
+		$external_profile = $this->getProfileFromExternalInstance($instanceurl,$user_id_or_nickname);
+		if(!isset($external_profile->statusnet_profile_url)) {
+			return true;									
+			}						
+		$this->profile->external = $external_profile;	
 		
-		// get profile from external instance
-		$apicall = $instanceurl.'/api/users/show.json?id='.$username; 	
-        $client = new HTTPClient();
-        $response = $client->get($apicall);
-        // json_decode returns null if it fails to decode
-        $this->profile->external = $response->isOk() ? json_decode($response->getBody()) : null;
-
-        return true;
+		return true;	
+		
     }
 
     /**
@@ -141,16 +175,18 @@ class ApiExternalUserShowAction extends ApiPrivateAuthAction
     
 
     /**
-     * Get redirect(s) for an url
+     * Get profile from external instance
      *
-     * @return mixed  Location URL if redirect, null if no Location header (through HTTP_Request2_Response getHeader())
+     * @return null or profile object
      */
-	function getRedirectUrl ($url) {
+	function getProfileFromExternalInstance($instance_url,$user_id_or_nickname) 
+	{
+		$apicall = $instance_url.'/api/users/show.json?id='.$user_id_or_nickname; 	
         $client = new HTTPClient();
-        $response = $client->head($url);
-        return $response->getHeader('Location');    // null if it isn't set
+        $response = $client->get($apicall);
+        // json_decode returns null if it fails to decode
+        return $response->isOk() ? json_decode($response->getBody()) : null;		
 	}
-
 
     
 }
