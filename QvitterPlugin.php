@@ -38,7 +38,7 @@ const QVITTERDIR = __DIR__;
 
 class QvitterPlugin extends Plugin {
 
-    protected $hijack_ui = true;
+    protected $hijack_ui = false;
     protected $qvitter_hide_replies = false;
 
 	static function settings($setting)
@@ -51,7 +51,7 @@ class QvitterPlugin extends Plugin {
          · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
 		// THESE SETTINGS CAN BE OVERRIDDEN IN CONFIG.PHP
-		// e.g. $config['site']['qvitter']['enabledbydefault'] = 'false';
+		// e.g. $config['site']['qvitter']['enabledbydefault'] = false;
 
 		// ENABLED BY DEFAULT (true/false)
 		$settings['enabledbydefault'] = true;
@@ -94,6 +94,9 @@ class QvitterPlugin extends Plugin {
 		// IP ADDRESSES BLOCKED FROM REGISTRATION
 		$settings['blocked_ips'] = array();
 
+        // LINKIFY DOMAINS WITHOUT PROTOCOL AS DEFAULT
+        $settings['linkify_bare_domains'] = true;
+
 
 		 /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
 		  ·                                                                   ·
@@ -109,6 +112,9 @@ class QvitterPlugin extends Plugin {
 			$settings[$configphpsetting] = $value;
 		}
 
+        // set linkify setting
+        common_config_set('linkify', 'bare_domains', $settings['linkify_bare_domains']);
+
 		if(isset($settings[$setting])) {
 			return $settings[$setting];
 		}
@@ -119,20 +125,6 @@ class QvitterPlugin extends Plugin {
 
     public function initialize()
     {
-		// check if we should reroute UI to qvitter, and which home-stream the user wants (hide-replies or normal)
-		$scoped = Profile::current();
-		$qvitter_enabled_by_user = false;
-		$qvitter_disabled_by_user = false;
-		if ($scoped instanceof Profile) {
-			$qvitter_enabled_by_user = $scoped->getPref('qvitter', 'enable_qvitter', false);
-			$qvitter_disabled_by_user = $scoped->getPref('qvitter', 'disable_qvitter', false);
-            $this->qvitter_hide_replies = $scoped->getPref('qvitter', 'hide_replies', false);
-		}
-
-		$this->hijack_ui = (self::settings('enabledbydefault') && !$scoped)
-                            || (self::settings('enabledbydefault') && !$qvitter_disabled_by_user)
-                            || (!self::settings('enabledbydefault') && $qvitter_enabled_by_user);
-
         // show qvitter link in the admin panel
         common_config_append('admin', 'panels', 'qvitteradm');
     }
@@ -189,13 +181,37 @@ class QvitterPlugin extends Plugin {
                     array('action' => 'qvitterlogin'));
 
 
-        if ($this->hijack_ui) {
+		// check if we should reroute UI to qvitter, and which home-stream the user wants (hide-replies or normal)
+		$scoped = Profile::current();
+		$qvitter_enabled_by_user = 0;
+		$qvitter_disabled_by_user = 0;
+		if ($scoped instanceof Profile) {
+			$qvitter_enabled_by_user = (int)$scoped->getPref('qvitter', 'enable_qvitter', false);
+			$qvitter_disabled_by_user = (int)$scoped->getPref('qvitter', 'disable_qvitter', false);
+            $this->qvitter_hide_replies = $scoped->getPref('qvitter', 'hide_replies', false);
+		}
+
+        // reroute to qvitter if we're logged out and qvitter is enabled by default
+        if(static::settings('enabledbydefault') === true && is_null($scoped)) {
+            $this->hijack_ui = true;
+        }
+        // if we're logged in and qvitter is enabled by default, reroute if the user has not disabled qvitter
+        elseif(static::settings('enabledbydefault') === true && $qvitter_disabled_by_user == 0){
+            $this->hijack_ui = true;
+        }
+        // if we're logged in, and qvitter is _not_ enabled by default, reroute if the user enabled qvitter
+        elseif(static::settings('enabledbydefault') === false && $qvitter_enabled_by_user == 1) {
+            $this->hijack_ui = true;
+        }
+
+
+        if ($this->hijack_ui === true) {
 			$m->connect('', array('action' => 'qvitter'));
 			$m->connect('main/all', array('action' => 'qvitter'));
 			$m->connect('search/notice', array('action' => 'qvitter'));
 
             // if the user wants the twitter style home stream with hidden replies to non-friends
-            if ($this->qvitter_hide_replies) {
+            if ($this->qvitter_hide_replies == 1) {
 			URLMapperOverwrite::overwrite_variable($m, 'api/statuses/friends_timeline.:format',
 									array('action' => 'ApiTimelineFriends'),
 									array('format' => '(xml|json|rss|atom|as)'),
@@ -267,11 +283,8 @@ class QvitterPlugin extends Plugin {
 			}
 
 
-
-
 		// add user arrays for some urls, to use to build profile cards
 		// this way we don't have to request this in a separate http request
-
 		if(isset($_GET['withuserarray'])) switch (getPath($_REQUEST)) {
 		case 'api/statuses/followers.json':
 		case 'api/statuses/friends.json':
@@ -731,26 +744,38 @@ class QvitterPlugin extends Plugin {
 
 		// outputs an activity notice that this notice was deleted
         $profile = $notice->getProfile();
-        $rendered = sprintf(_m('<a href="%1$s">%2$s</a> deleted notice <a href="%3$s">{{%4$s}}</a>.'),
-                            $profile->getUrl(),
-                            $profile->getBestName(),
-                            $notice->getUrl(),
-                            $notice->uri);
-        $text = sprintf(_m('%1$s deleted notice {{%2$s}}.'),
-                            $profile->getBestName(),
-                            $notice->uri);
-        $uri = TagURI::mint('delete-notice:%d:%d:%s',
-                            $notice->profile_id,
-                            $notice->id,
-                            common_date_iso8601(common_sql_now()));
-        $notice = Notice::saveNew($notice->profile_id,
-                                  $text,
-                                  ActivityPlugin::SOURCE,
-                                  array('rendered' => $rendered,
-                                        'urls' => array(),
-                                        'uri' => $uri,
-                                        'verb' => 'qvitter-delete-notice',
-                                        'object_type' => ActivityObject::ACTIVITY));
+
+        // don't delete if this is a user is being deleted
+        // because that creates an infinite loop of deleting and creating notices...
+        $user_is_deleted = false;
+        $user = User::getKV('id',$profile->id);
+        if($user instanceof User && $user->hasRole(Profile_role::DELETED)) {
+            $user_is_deleted = true;
+        }
+
+        if(!$user_is_deleted) {
+            $rendered = sprintf(_m('<a href="%1$s">%2$s</a> deleted notice <a href="%3$s">{{%4$s}}</a>.'),
+                                $profile->getUrl(),
+                                $profile->getBestName(),
+                                $notice->getUrl(),
+                                $notice->uri);
+            $text = sprintf(_m('%1$s deleted notice {{%2$s}}.'),
+                                $profile->getBestName(),
+                                $notice->uri);
+            $uri = TagURI::mint('delete-notice:%d:%d:%s',
+                                $notice->profile_id,
+                                $notice->id,
+                                common_date_iso8601(common_sql_now()));
+            $notice = Notice::saveNew($notice->profile_id,
+                                      $text,
+                                      ActivityPlugin::SOURCE,
+                                      array('rendered' => $rendered,
+                                            'urls' => array(),
+                                            'uri' => $uri,
+                                            'verb' => 'qvitter-delete-notice',
+                                            'object_type' => ActivityObject::ACTIVITY));
+        }
+
 
         return true;
     }
