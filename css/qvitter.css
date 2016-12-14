@@ -141,11 +141,7 @@ button.shorten i,
     z-index: 100;
 	display:none;
 	}
-<<<<<<< HEAD
 
-
-=======
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
 #top-compose:before {
 	cursor: pointer;
 	display: block;
@@ -5175,19 +5171,13 @@ body.rtl #feed-header-inner h2  {
 		}
 	.stream-selection.current:after {
 		background-color:transparent;
-<<<<<<< HEAD
 		}									
 	/*
 	#feed-header {
 	    display: none;
 		}
 	*/	
-=======
-		}
-	#feed-header {
-	    display: none;
-		}
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
+
 	.profile-card {
 		width:100%;
 		border:0 none;
