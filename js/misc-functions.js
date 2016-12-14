@@ -843,7 +843,7 @@ function detectRTL(s) {
 	// we remove @, ! and #, they are added as pseudo elements, or have been moved to the inside
    	return $streamItem.html().replace(/@<a/gi,'<a').replace(/!<a/gi,'<a').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">');
 	}
-<<<<<<< HEAD
+
 	
 function secondsToTime(s){
     var h  = Math.floor( s / ( 60 * 60 ) );
@@ -860,13 +860,7 @@ function secondsToTime(s){
 	
 /* · 
    · 
-=======
 
-
-
-/* ·
-   ·
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
    ·   Takes twitter style dates and converts them
    ·
    ·   @param tdate: date in the form of e.g. 'Mon Aug 05 16:30:22 +0200 2013'
@@ -1438,28 +1432,7 @@ function deleteBetweenCharacterIndices(el, from, to) {
    · · · · · · · · · · · · · */
 
 function shortenUrlsInBox(shortenButton) {
-<<<<<<< HEAD
-        shortenButton.addClass('disabled');
 
-        $.each(shortenButton.parent().parent().siblings('.syntax-middle').find('span.url'),function(key,obj){
-
-                var url = $.trim($(obj).text());
-
-                display_spinner();
-
-                $.ajax({ url: window.urlShortenerAPIURL + '?format=jsonp&action=shorturl&signature=' + window.urlShortenerSignature + '&url=' + encodeURIComponent(url), type: "GET", dataType: "jsonp", success: function(data) {
-
-                        if(typeof data.shorturl != 'undefined') {
-
-                                shortenButton.closest('.queet-toolbar').siblings('.upload-image-container').children('img[data-shorturl="' + data.url.url + '"]').attr('data-shorturl',data.shorturl);
-                                shortenButton.parent().parent().siblings('.queet-box-syntax').html(shortenButton.parent().parent().siblings('.queet-box-syntax').html().replace($('<div/>').text(data.url.url).html(), data.shorturl));
-                                shortenButton.parent().parent().siblings('.queet-box-syntax').trigger('keyup');
-                                shortenButton.addClass('disabled'); // make sure the button is disabled right after
-                                }
-                        remove_spinner();
-                        }});
-                });
-=======
 	shortenButton.addClass('disabled');
 
 	$.each(shortenButton.parent().parent().siblings('.syntax-middle').find('span.url'),function(key,obj){
@@ -1486,7 +1459,6 @@ function shortenUrlsInBox(shortenButton) {
 				}
 			});
 		});
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
 }
 
 /* ·
@@ -1519,8 +1491,4 @@ function theUserOrGroupThisStreamBelongsTo(stream) {
 		return stream;
 		}
 	}
-<<<<<<< HEAD
-	
 
-=======
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
