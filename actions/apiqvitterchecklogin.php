@@ -61,25 +61,33 @@ class ApiQvitterCheckLoginAction extends ApiAction
     {
         parent::handle();
 
+        $this->format = 'json';
+
         if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-            $this->clientError(
-                // TRANS: Client error. POST is a HTTP command. It should not be translated.
-                _('This method requires a POST.'),
-                400,
-                $this->format
-            );
+            $this->clientError(_('This method requires a POST.'), 400);
             return;
         }
-        
+
 		$user = common_check_user($this->arg('username'),
-								  $this->arg('password'));   
-		
-		if($user) {
-			$user = true;
+								  $this->arg('password'));
+
+		if(!$user instanceof User) {
+			$this->clientError(_('Incorrect credentials.'), 401);
 			}
 
+        // silenced?
+        if($user->isSilenced()) {
+            $this->clientError(_('User '.json_encode($user->isSilenced()).' is silenced.'), 403);
+        }
+
+        try {
+            $profile = $user->getProfile();
+        } catch (UserNoProfileException $e) {
+            $this->clientError(_('User got no profile.'), 400);
+        }
+
 		$this->initDocument('json');
-		$this->showJsonObjects($user);
+		$this->showJsonObjects($this->twitterUserArray($profile));
 		$this->endDocument('json');
     }
 

@@ -63,17 +63,24 @@ function timeNow() {
 
 function getDoc(doc, actionOnSuccess) {
 	var timeNow = new Date().getTime();
-	$.get(window.fullUrlToThisQvitterApp + 'doc/' + window.selectedLanguage + '/' + doc + '.html?t=' + timeNow, function(data){
-		if(data) {
+
+	$.ajax({ url: window.fullUrlToThisQvitterApp + 'doc/' + window.selectedLanguage + '/' + doc + '.html',
+		cache: false,
+		type: "GET",
+		success: function(data) {
 			actionOnSuccess(renderDoc(data));
-			}
-		}).fail(function() { // default to english if we can't find the doc in selected language
-			$.get(window.fullUrlToThisQvitterApp + 'doc/en/' + doc + '.html?t=' + timeNow, function(data){
-				if(data) {
+			},
+		error: function() {
+			// default to english if we can't find the doc in selected language
+			$.ajax({ url: window.fullUrlToThisQvitterApp + 'doc/en/' + doc + '.html',
+				cache: false,
+				type: "GET",
+				success: function(data) {
 					actionOnSuccess(renderDoc(data));
 					}
 				});
-			});
+			}
+		});
 	}
 function renderDoc(docHtml) {
 	docHtml = docHtml.replace(/{instance-name}/g,window.siteTitle);
@@ -98,21 +105,25 @@ function renderDoc(docHtml) {
 
 function checkLogin(username,password,actionOnSuccess) {
  	$.ajax({ url: window.apiRoot + 'qvitter/checklogin.json',
-	 	type: 'POST',
+		cache: false,
+		type: 'POST',
 	 	data: {
 			username: username,
 			password: password
 			},
 	 	dataType: 'json',
-	 	error: function() {
-	 		logoutWithoutReload(true);
+	 	error: function(data) {
+	 		shakeLoginBox();
+			if(data.status === 403) {
+				showErrorMessage(window.sL.silenced);
+				}
 	 		},
  		success: function(data) {
 			if(typeof data.error == 'undefined' && data !== false) {
 				actionOnSuccess(data);
 				}
 			else {
-		 		logoutWithoutReload(true);
+		 		shakeLoginBox();
 				}
 			}
 		});
@@ -129,58 +140,210 @@ function checkLogin(username,password,actionOnSuccess) {
    · · · · · · · · · · · · · */
 
 function getFromAPI(stream, actionOnSuccess) {
-	$.ajax({ url: window.apiRoot + stream + qOrAmp(stream) + 't=' + timeNow(),
+	var url = window.apiRoot + stream;
+	$.ajax({ url: url,
+		cache: false,
 		type: "GET",
 		dataType: 'json',
 		statusCode: {
 			401:function() {
 				location.reload(); // we may have been logged out in another tab, reload page
-				},
-			404:function() {
-				// redirect to frontpage when trying to access non-existing users
-				if(stream.indexOf('statuses/user_timeline.json?screen_name=') > -1) {
-					window.location.replace(window.siteInstanceURL);
-					}
 				}
 			},
 		success: function(data, textStatus, request) {
 
+			// if there's no Qvitter-Notifications header, it means we're logged out
+			// so if it's missing and Qvitter still thinks we're logged in, reload page
+			// we've probably been logged out in another tab or something
+			if(request.getResponseHeader('Qvitter-Notifications') === null && window.loggedIn !== false) {
+				location.reload();
+				return;
+				}
+
 			displayOrHideUnreadNotifications(request.getResponseHeader('Qvitter-Notifications'));
 
-			// profile card from user array, also cache it
+			// parse and cache any user arrays in header
+			var userArray = false;
 			if(request.getResponseHeader('Qvitter-User-Array') !== null) {
+                var qvitterUserArrayHeader = request.getResponseHeader('Qvitter-User-Array');
 
-                // while waiting for this data user might have changed stream, so only proceed if current stream still is this one
-                if(window.currentStream == stream.replace('&withuserarray=1','')) {
-                    var qvitterUserArrayHeader = request.getResponseHeader('Qvitter-User-Array');
+				// quitter.se fix
+				if(window.thisSiteThinksItIsHttpButIsActuallyHttps) {
+					qvitterUserArrayHeader = qvitterUserArrayHeader.replace(new RegExp('http:\\\\/\\\\/' + window.siteRootDomain, 'g'), 'https:\/\/' + window.siteRootDomain);
+					}
 
-    				// quitter.se fix
-    				if(window.thisSiteThinksItIsHttpButIsActuallyHttps) {
-    					qvitterUserArrayHeader = qvitterUserArrayHeader.replace(new RegExp('http:\\\\/\\\\/' + window.siteRootDomain, 'g'), 'https:\/\/' + window.siteRootDomain);
-    					}
-
-    				var userArray = iterateRecursiveReplaceHtmlSpecialChars($.parseJSON(qvitterUserArrayHeader));
-    				userArrayCacheStore(userArray);
-    				addProfileCardToDOM(buildProfileCard(userArray));
-                    }
+				userArray = iterateRecursiveReplaceHtmlSpecialChars($.parseJSON(qvitterUserArrayHeader));
+				userArrayCacheStore(userArray);
 				}
 
 			data = convertEmptyObjectToEmptyArray(data);
-
 			data = iterateRecursiveReplaceHtmlSpecialChars(data);
-
 			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			searchForUpdatedNoticeData(data);
 
-			actionOnSuccess(data);
+			actionOnSuccess(data, userArray, request, url);
 			},
-		error: function(data) {
-			actionOnSuccess(false);
-			console.log(data);
+		error: function(data, textStatus, errorThrown) {
+			data.textStatus = textStatus;
+			data.errorThrown = errorThrown;
+			actionOnSuccess(false, false, data, url);
 			remove_spinner();
 			}
 		});
 	}
 
+/* ·
+   ·
+   ·   Hello to the API! When saying hello you will e.g. also get headers
+   ·   with up-to-date unread notifications count to update etc
+   ·
+   ·   @param callback: function to invoke when done
+   ·
+   · · · · · · · · · · · · · */
+
+function helloAPI(callback) {
+	getFromAPI('qvitter/hello.json',function(){
+		if(typeof callback == 'function') {
+			callback();
+			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·   Get all people we follow, all groups we're in and everyone we've blocked
+   ·   Store in global objects
+   ·
+   ·   @param callback: function to invoke when done
+   ·
+   · · · · · · · · · · · · · */
+
+function getAllFollowsMembershipsAndBlocks(callback) {
+
+	if(window.loggedIn === false) {
+		return;
+		}
+
+	window.following = new Object();
+	window.groupMemberships = new Object();
+	window.groupNicknamesAndLocalAliases = new Array();
+	window.allBlocking = new Array();
+
+	getFromAPI('qvitter/allfollowing/' + window.loggedIn.screen_name + '.json',function(data){
+
+		if(data.users) {
+			$.each(data.users,function(k,v){
+				if(v[2] === false) { var avatar = window.defaultAvatarStreamSize; }
+				else { 	var avatar = v[2]; }
+				if(v[3]) {
+					// extract server base url
+					v[3] = v[3].substring(v[3].indexOf('://')+3,v[3].lastIndexOf(v[1])-1);
+					}
+				v[0] = v[0] || v[1]; // if name is null we go with username there too
+				window.following[k] = { 'id': k,'name': v[0], 'username': v[1],'avatar': avatar, 'url':v[3] };
+				});
+			}
+
+		if(data.groups) {
+			$.each(data.groups,function(k,v){
+				if(v[2] === false || v[2] === null) { var avatar = window.defaultAvatarStreamSize; }
+				else { 	var avatar = v[2]; }
+				if(v[3]) {
+					// extract server base url
+					v[3] = v[3].substring(v[3].indexOf('://')+3);
+					v[3] = v[3].substring(0, v[3].indexOf('/'));
+					}
+				v[0] = v[0] || v[1]; // if name is null we go with username there too
+				window.groupMemberships[k] = { 'id': k,'name': v[0], 'username': v[1],'avatar': avatar, 'url':v[3] };
+				window.groupNicknamesAndLocalAliases[k] = v[1];
+				});
+			}
+
+		if(data.blocks)	{
+			window.allBlocking = data.blocks;
+			markAllNoticesFromBlockedUsersAsBlockedInJQueryObject($('body'));
+			}
+
+		if(typeof callback == 'function') {
+			callback();
+			}
+		});
+	}
+
+
+
+
+/* ·
+   ·
+   ·   Get user nickname by user id
+   ·
+   ·   @param id: local user id
+   ·   @param callback: function to invoke when done
+   ·
+   · · · · · · · · · · · · · */
+
+function getNicknameByUserIdFromAPI(id, callback) {
+	display_spinner();
+	getFromAPI('users/show.json?id=' + id, function(data){
+		remove_spinner();
+		if(data && typeof data.screen_name != 'undefined') {
+			callback(data.screen_name);
+			}
+		else {
+			callback(false);
+			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·   Get group nickname by group id
+   ·
+   ·   @param id: local group id
+   ·   @param callback: function to invoke when done
+   ·
+   · · · · · · · · · · · · · */
+
+function getNicknameByGroupIdFromAPI(id, callback) {
+	display_spinner();
+	getFromAPI('statusnet/groups/show/' + id + '.json', function(data){
+		remove_spinner();
+		if(data && typeof data.nickname != 'undefined') {
+			callback(data.nickname);
+			}
+		else {
+			callback(false);
+			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·   Update the bookmarks
+   ·
+   ·   @param newBookmarks: the new bookmarks object to save
+   ·
+   · · · · · · · · · · · · · */
+
+function postUpdateBookmarks(newBookmarks) {
+	var bookmarksString = JSON.stringify(newBookmarks);
+	$.ajax({ url: window.apiRoot + 'qvitter/update_bookmarks.json',
+		cache: false,
+		type: "POST",
+		data: {
+			bookmarks: bookmarksString
+			},
+		dataType:"json",
+		error: function(data){ console.log('error updating bookmarks'); },
+		success: function(data) {
+			// console.log('bookmarks updated successfully');
+			}
+		});
+	}
 
 
 /* ·
@@ -192,7 +355,8 @@ function getFromAPI(stream, actionOnSuccess) {
    · · · · · · · · · · · · · */
 
 function postNewLinkColor(newLinkColor) {
-	$.ajax({ url: window.apiRoot + 'qvitter/update_link_color.json?t=' + timeNow(),
+	$.ajax({ url: window.apiRoot + 'qvitter/update_link_color.json',
+		cache: false,
 		type: "POST",
 		data: {
 			linkcolor: newLinkColor
@@ -216,7 +380,8 @@ function postNewLinkColor(newLinkColor) {
    · · · · · · · · · · · · · */
 
 function postNewBackgroundColor(newBackgroundColor) {
-	$.ajax({ url: window.apiRoot + 'qvitter/update_background_color.json?t=' + timeNow(),
+	$.ajax({ url: window.apiRoot + 'qvitter/update_background_color.json',
+		cache: false,
 		type: "POST",
 		data: {
 			backgroundcolor: newBackgroundColor
@@ -228,6 +393,34 @@ function postNewBackgroundColor(newBackgroundColor) {
 			window.loggedIn.background_image = false;
 			changeDesign({backgroundimage:false,backgroundcolor:newBackgroundColor});
 			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·   Set a profile pref
+   ·
+   ·   @param namespace: the namespace field in the db table, should be 'qvitter'
+   ·   @param topic: the topic field in the db table,
+   ·   @param data: the data to set
+   ·   @param callback: function to run when finished
+   ·
+   · · · · · · · · · · · · · */
+
+function postSetProfilePref(namespace, topic, data, callback) {
+	$.ajax({ url: window.apiRoot + 'qvitter/set_profile_pref.json',
+		cache: false,
+		type: "POST",
+		data: {
+			namespace: namespace,
+			topic: topic,
+			data: data
+			},
+		dataType:"json",
+		error: function(data){ callback(false); },
+		success: function(data) {
+			callback(data);			}
 		});
 	}
 
@@ -246,22 +439,128 @@ function postNewBackgroundColor(newBackgroundColor) {
 function APIFollowOrUnfollowUser(followOrUnfollow,user_id,this_element,actionOnSuccess) {
 
 	if(followOrUnfollow == 'follow') {
-		var postRequest = 'friendships/create.json?t=' + timeNow();
+		var postRequest = 'friendships/create.json';
 		}
 	else if (followOrUnfollow == 'unfollow') {
-		var postRequest = 'friendships/destroy.json?t=' + timeNow();
+		var postRequest = 'friendships/destroy.json';
 		}
 
 	$.ajax({ url: window.apiRoot + postRequest,
+		cache: false,
 		type: "POST",
 		data: {
 			user_id: user_id
 			},
 		dataType:"json",
 		error: function(data){ actionOnSuccess(false,this_element); console.log(data); },
-		success: function(data) { actionOnSuccess(data,this_element);}
+		success: function(data) {
+			data = convertEmptyObjectToEmptyArray(data);
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			actionOnSuccess(data,this_element);
+			}
 		});
 	}
+
+/* ·
+   ·
+   ·   Post block or unblock user request
+   ·
+   ·   @param blockOrUnblock: either 'block' or 'unblock'
+   ·   @param user_id: the user id of the user we want to block/unblock
+   ·   @param actionOnSuccess: callback function, false on error, data on success
+   ·
+   · · · · · · · · · · · · · */
+
+function APIBlockOrUnblockUser(blockOrUnblock,user_id,actionOnSuccess) {
+
+	if(blockOrUnblock == 'block') {
+		var postRequest = 'blocks/create.json';
+		}
+	else if (blockOrUnblock == 'unblock') {
+		var postRequest = 'blocks/destroy.json';
+		}
+
+	$.ajax({ url: window.apiRoot + postRequest,
+		cache: false,
+		type: "POST",
+		data: {
+			id: user_id
+			},
+		dataType:"json",
+		error: function(data){ actionOnSuccess(false); console.log(data); },
+		success: function(data) {
+			data = convertEmptyObjectToEmptyArray(data);
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			actionOnSuccess(data);
+			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·   Post sandbox or unsandbox user request
+   ·
+   ·   @param createOrDestroy: either 'create' or 'destroy'
+   ·   @param userId: the user id of the user we want to sandbox/unsandbox
+   ·   @param actionOnSuccess: callback function, false on error, data on success
+   ·
+   · · · · · · · · · · · · · */
+
+function APISandboxCreateOrDestroy(createOrDestroy,userId,actionOnSuccess) {
+	$.ajax({ url: window.apiRoot + 'qvitter/sandbox/' + createOrDestroy + '.json',
+		cache: false,
+		type: "POST",
+		data: {
+			id: userId
+			},
+		dataType:"json",
+		error: function(data){ actionOnSuccess(false); console.log('sandbox error'); console.log(data); },
+		success: function(data) {
+			data = convertEmptyObjectToEmptyArray(data);
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			rememberStreamStateInLocalStorage();
+			actionOnSuccess(data);
+			}
+		});
+	}
+
+/* ·
+   ·
+   ·   Post silence or unsilence user request
+   ·
+   ·   @param createOrDestroy: either 'create' or 'destroy'
+   ·   @param userId: the user id of the user we want to silence/unsilence
+   ·   @param actionOnSuccess: callback function, false on error, data on success
+   ·
+   · · · · · · · · · · · · · */
+
+function APISilenceCreateOrDestroy(createOrDestroy,userId,actionOnSuccess) {
+	$.ajax({ url: window.apiRoot + 'qvitter/silence/' + createOrDestroy + '.json',
+		cache: false,
+		type: "POST",
+		data: {
+			id: userId
+			},
+		dataType:"json",
+		error: function(data){ actionOnSuccess(false); console.log('silence error'); console.log(data); },
+		success: function(data) {
+			data = convertEmptyObjectToEmptyArray(data);
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			rememberStreamStateInLocalStorage();
+			actionOnSuccess(data);
+			}
+		});
+	}
+
 
 
 /* ·
@@ -275,14 +574,21 @@ function APIFollowOrUnfollowUser(followOrUnfollow,user_id,this_element,actionOnS
    · · · · · · · · · · · · · */
 
 function APIJoinOrLeaveGroup(joinOrLeave,group_id,this_element,actionOnSuccess) {
-	$.ajax({ url: window.apiRoot + 'statusnet/groups/' + joinOrLeave + '.json?t=' + timeNow(),
+	$.ajax({ url: window.apiRoot + 'statusnet/groups/' + joinOrLeave + '.json',
+		cache: false,
 		type: "POST",
 		data: {
 			id: group_id
 			},
 		dataType:"json",
 		error: function(data){ actionOnSuccess(false,this_element); console.log(data); },
-		success: function(data) { actionOnSuccess(data,this_element);}
+		success: function(data) {
+			data = convertEmptyObjectToEmptyArray(data);
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			actionOnSuccess(data,this_element);
+			}
 		});
 	}
 
@@ -293,21 +599,31 @@ function APIJoinOrLeaveGroup(joinOrLeave,group_id,this_element,actionOnSuccess) 
    ·
    ·   @param queetText_txt: the text to post
    ·   @param in_reply_to_status_id: the local id for the queet to reply to
+   ·   @param postToGroups: post the queet in these groups, string of ids separated by colon expected, e.g. 5:2:4
    ·   @param actionOnSuccess: callback function, false on error, data on success
    ·
    · · · · · · · · · · · · · */
 
-function postQueetToAPI(queetText_txt, in_reply_to_status_id, actionOnSuccess) {
-	$.ajax({ url: window.apiRoot + 'statuses/update.json?t=' + timeNow(),
+function postQueetToAPI(queetText_txt, in_reply_to_status_id, postToGroups, actionOnSuccess) {
+	$.ajax({ url: window.apiRoot + 'qvitter/statuses/update.json',
+		cache: false,
 		type: "POST",
 		data: {
 			status: queetText_txt,
 			source: 'Qvitter',
-			in_reply_to_status_id: in_reply_to_status_id
+			in_reply_to_status_id: in_reply_to_status_id,
+			post_to_groups: postToGroups
 			},
 		dataType:"json",
 		error: function(data){ actionOnSuccess(false); console.log(data); },
-		success: function(data) { actionOnSuccess(data);}
+		success: function(data) {
+			data = convertEmptyObjectToEmptyArray(data);
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			searchForUpdatedNoticeData(data);
+			actionOnSuccess(data);
+			}
 		});
 	}
 
@@ -324,7 +640,8 @@ function postQueetToAPI(queetText_txt, in_reply_to_status_id, actionOnSuccess) {
    · · · · · · · · · · · · · */
 
 function postActionToAPI(action, actionOnSuccess) {
-	$.ajax({ url: window.apiRoot + action + qOrAmp(action) + 't=' + timeNow(),
+	$.ajax({ url: window.apiRoot + action,
+		cache: false,
 		type: "POST",
 		data: {
 			source: 'Qvitter'
@@ -332,46 +649,12 @@ function postActionToAPI(action, actionOnSuccess) {
 		dataType:"json",
 		error: function(data){ actionOnSuccess(false); console.log(data); },
 		success: function(data) {
-
 			data = convertEmptyObjectToEmptyArray(data);
-
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
+			searchForUserDataToCache(data);
+			updateUserDataInStream();
+			searchForUpdatedNoticeData(data);
 			actionOnSuccess(data);
-			}
-		});
-	}
-
-
-/* ·
-   ·
-   ·   Delete requeet
-   ·
-   ·   @param this_stream_item: jQuery object for stream-item
-   ·   @param this_action: JQuery object for the requeet-button
-   ·   @param my_rq_id: the id for the requeet
-   ·
-   · · · · · · · · · */
-
-function unRequeet(this_stream_item, this_action, my_rq_id) {
-	this_action.children('.with-icn').removeClass('done');
-	this_action.find('.with-icn b').html(window.sL.requeetVerb);
-	this_stream_item.removeClass('requeeted');
-
-	// post unrequeet
-	postActionToAPI('statuses/destroy/' + my_rq_id + '.json', function(data) {
-		if(data) {
-			remove_spinner();
-			this_stream_item.removeAttr('data-requeeted-by-me-id');
-			this_stream_item.children('.queet').children('.context').find('.requeet-text').children('a[data-user-id="' + window.myUserID + '"]').remove();
-			if(this_stream_item.children('.queet').children('.context').find('.requeet-text').children('a').length<1) {
-				this_stream_item.children('.queet').children('.context').remove();
-				}
-			getFavsAndRequeetsForQueet(this_stream_item, this_stream_item.attr('data-quitter-id'));
-			}
-		else {
-			remove_spinner();
-			this_action.children('.with-icn').addClass('done');
-			this_action.find('.with-icn b').html(window.sL.requeetedVerb);
-			this_stream_item.addClass('requeeted');
 			}
 		});
 	}
@@ -395,10 +678,13 @@ function getFavsAndRequeetsForQueet(q,qid) {
 		showFavsAndRequeetsInQueet(q, cacheData);
 		}
 
-	$.ajax({ url: window.apiRoot + "qvitter/favs_and_repeats/" + qid + ".json?t=" + timeNow(),
+	$.ajax({ url: window.apiRoot + "qvitter/favs_and_repeats/" + qid + ".json",
+		cache: false,
 		type: "GET",
 		dataType: 'json',
 		success: function(data) {
+
+			data = iterateRecursiveReplaceHtmlSpecialChars(data);
 
 			if(data.favs.length > 0 || data.repeats.length > 0) {
 				localStorageObjectCache_STORE('favsAndRequeets',qid, data); // cache response

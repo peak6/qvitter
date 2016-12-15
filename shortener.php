@@ -1,7 +1,7 @@
 <?php
 /*
 
-This is an example file of how you can utilise http://qttr.at/yourls-api.php URL shortener service from a GNUSocial instance, which is using https. 
+This is an example file of how you can utilise http://qttr.at/yourls-api.php URL shortener service from a GNUSocial instance, which is using https.
 If you run the qvitter code «as is» the browser will stop you from communicate to qttr.at which is currently running http protocol.
 
 This «proxy» return the result from http://qttr.at/yourls-api.php
@@ -13,7 +13,7 @@ This «proxy» return the result from http://qttr.at/yourls-api.php
 
 Contact Knut Erik if you have any questions related to this .php file.
 Quitter.no => knuthollund@quitter.no
-GitHub: => https://github.com/knuthollund
+GitHub: => https://github.com/fxdwg
 
 */
 

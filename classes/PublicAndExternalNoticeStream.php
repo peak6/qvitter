@@ -1,11 +1,11 @@
 <?php
 
- /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  
+ /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
   ·                                                                             ·
   ·                                                                             ·
   ·                             Q V I T T E R                                   ·
   ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
+  ·                      https://git.gnu.io/h2p/Qvitter                         ·
   ·                                                                             ·
   ·                                                                             ·
   ·                                 <o)                                         ·
@@ -15,7 +15,7 @@
   ·                                   o> \\\\_\                                 ·
   ·                                 \\)   \____)                                ·
   ·                                                                             ·
-  ·                                                                             ·    
+  ·                                                                             ·
   ·                                                                             ·
   ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
   ·  under the  terms of the GNU Affero General Public License as published by  ·
@@ -31,7 +31,7 @@
   ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
   ·                                                                             ·
   ·  Contact h@nnesmannerhe.im if you have any questions.                       ·
-  ·                                                                             · 
+  ·                                                                             ·
   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
 
@@ -43,7 +43,7 @@ class PublicAndExternalNoticeStream extends ScopingNoticeStream
 {
     function __construct($profile=null)
     {
-        
+
         parent::__construct(new CachingNoticeStream(new RawPublicAndExternalNoticeStream(),
                                                     'publicAndExternal'),
                             $profile);
@@ -60,7 +60,7 @@ class RawPublicAndExternalNoticeStream extends NoticeStream
         $notice->selectAdd();
         $notice->selectAdd('id');
 
-        $notice->orderBy('created DESC, id DESC');
+        $notice->orderBy('id DESC');
 
         if (!is_null($offset)) {
             $notice->limit($offset, $limit);
@@ -69,10 +69,27 @@ class RawPublicAndExternalNoticeStream extends NoticeStream
 
 		$notice->whereAdd('is_local !='. Notice::LOCAL_NONPUBLIC);
 		$notice->whereAdd('is_local !='. Notice::GATEWAY);
-		$notice->whereAdd('repeat_of IS NULL');		
+		$notice->whereAdd('repeat_of IS NULL');
 
-        Notice::addWhereSinceId($notice, $since_id);
-        Notice::addWhereMaxId($notice, $max_id);
+        // don't show sandboxed users in public timelines, unless you are a mod
+        $hide_sandboxed = true;
+        $cur_profile = Profile::current();
+        if($cur_profile instanceof Profile) {
+        	if($cur_profile->hasRight(Right::REVIEWSPAM)) {
+        		$hide_sandboxed = false;
+        	}
+        }
+        if($hide_sandboxed) {
+        	$notice->whereAdd('profile_id NOT IN (SELECT profile_id FROM profile_role WHERE role =\''.Profile_role::SANDBOXED.'\')');
+        }
+
+        if(!empty($max_id) && is_numeric($max_id)) {
+            $notice->whereAdd('id < '.$max_id);
+        }
+
+        if(!empty($since_id) && is_numeric($since_id)) {
+            $notice->whereAdd('id > '.$since_id);
+        }
 
         $ids = array();
 
@@ -84,7 +101,7 @@ class RawPublicAndExternalNoticeStream extends NoticeStream
 
         $notice->free();
         $notice = NULL;
-		
+
         return $ids;
     }
 }
