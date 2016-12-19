@@ -1,11 +1,11 @@
 <?php
- 
- /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·  
+
+ /* · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · ·
   ·                                                                             ·
   ·                                                                             ·
   ·                             Q V I T T E R                                   ·
   ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
+  ·                      https://git.gnu.io/h2p/Qvitter                         ·
   ·                                                                             ·
   ·                                                                             ·
   ·                                 <o)                                         ·
@@ -15,7 +15,7 @@
   ·                                   o> \\\\_\                                 ·
   ·                                 \\)   \____)                                ·
   ·                                                                             ·
-  ·                                                                             ·    
+  ·                                                                             ·
   ·                                                                             ·
   ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
   ·  under the  terms of the GNU Affero General Public License as published by  ·
@@ -31,14 +31,12 @@
   ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
   ·                                                                             ·
   ·  Contact h@nnesmannerhe.im if you have any questions.                       ·
-  ·                                                                             · 
+  ·                                                                             ·
   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
 if (!defined('STATUSNET') && !defined('LACONICA')) {
     exit(1);
 }
-
-require_once INSTALLDIR.'/extlib/htmLawed/htmLawed.php';
 
 
 class QvitterAdminSettingsAction extends AdminPanelAction
@@ -85,15 +83,19 @@ class QvitterAdminSettingsAction extends AdminPanelAction
     function saveSettings()
     {
         $qvitterNotice = $this->trimmed('qvitter-notice');
+        $qvitterNoticeLoggedOut = $this->trimmed('qvitter-notice-logged-out');
 
         // assert(all values are valid);
         // This throws an exception on validation errors
 
         $this->validate($qvitterNotice);
+        $this->validate($qvitterNoticeLoggedOut);
 
         $config = new Config();
 
         $result = Config::save('site', 'qvitternotice', $qvitterNotice);
+        $result = Config::save('site', 'qvitternoticeloggedout', $qvitterNoticeLoggedOut);
+
 
         if (!$result) {
             // TRANS: Server error displayed when saving a sidebar notice was impossible.
@@ -105,21 +107,13 @@ class QvitterAdminSettingsAction extends AdminPanelAction
     {
         // Validate notice text
 
-        if (mb_strlen($qvitterNotice) > 255)  {
+	//The column 'value' in table 'config' is TEXT
+        if (mb_strlen($qvitterNotice) > 21844)  {
             $this->clientError(
                 // TRANS: Client error displayed when a sidebar notice was longer than allowed.
-                _('Maximum length for the sidebar notice is 255 characters.')
+                _('Maximum length for the sidebar notice is 21844 characters.')
             );
         }
-
-        // scrub HTML input
-
-        $config = array(
-            'safe' => 1,
-            'deny_attribute' => 'on*'
-        );
-
-        $qvitterNotice = htmLawed($qvitterNotice, $config);
     }
 }
 
@@ -175,7 +169,22 @@ class QvitterNoticeAdminPanelForm extends AdminForm
             _('Qvitter sidebar notice text'),
             common_config('site', 'qvitternotice'),
             // TRANS: Tooltip for sidebar notice text field in admin panel.
-            _('Qvitter\'s sidebar notice text (255 characters maximum; HTML allowed)')
+            _('Qvitter\'s sidebar notice text (21,844 characters maximum; HTML allowed)')
+        );
+        $this->out->elementEnd('li');
+
+        $this->out->elementEnd('ul');
+
+        $this->out->elementStart('ul', 'form_data');
+
+        $this->out->elementStart('li');
+        $this->out->textarea(
+            'qvitter-notice-logged-out',
+            // TRANS: Label for sidebar notice text field in admin panel.
+            _('Qvitter sidebar notice text (logged out)'),
+            common_config('site', 'qvitternoticeloggedout'),
+            // TRANS: Tooltip for sidebar notice text field in admin panel.
+            _('Qvitter\'s sidebar notice text, when logged out (21,844 characters maximum; HTML allowed)')
         );
         $this->out->elementEnd('li');
 

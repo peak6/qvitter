@@ -1,14 +1,14 @@
 <?php
  /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  ·                                                                             · 
+  ·                                                                             ·
   ·  Update the cover photo                                                     ·
-  ·                                                                             ·         
-  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -   
+  ·                                                                             ·
+  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   ·                                                                             ·
   ·                                                                             ·
   ·                             Q V I T T E R                                   ·
   ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
+  ·                      https://git.gnu.io/h2p/Qvitter                         ·
   ·                                                                             ·
   ·                                                                             ·
   ·                                                                             ·
@@ -17,9 +17,9 @@
   ·                                 (____/                                      ·
   ·                                          (o<                                ·
   ·                                   o> \\\\_\                                 ·
-  ·                                 \\)   \____)                                ·   
+  ·                                 \\)   \____)                                ·
   ·                                                                             ·
-  ·                                                                             ·  
+  ·                                                                             ·
   ·  Qvitter is free  software:  you can  redistribute it  and / or  modify it  ·
   ·  under the  terms of the GNU Affero General Public License as published by  ·
   ·  the Free Software Foundation,  either version three of the License or (at  ·
@@ -34,7 +34,7 @@
   ·  along with Qvitter. If not, see <http://www.gnu.org/licenses/>.            ·
   ·                                                                             ·
   ·  Contact h@nnesmannerhe.im if you have any questions.                       ·
-  ·                                                                             · 
+  ·                                                                             ·
   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
 
@@ -57,14 +57,25 @@ class ApiUpdateBackgroundImageAction extends ApiAuthAction
     {
         parent::prepare($args);
 
+        $this->format = 'json';        
+
         $this->user = $this->auth_user;
 
         $this->cropW = $this->trimmed('cropW');
         $this->cropH = $this->trimmed('cropW'); // note W, we want a square
         $this->cropX = $this->trimmed('cropX');
         $this->cropY = $this->trimmed('cropY');
-        $this->img   = $this->trimmed('img');        
-        
+        $this->img   = $this->trimmed('img');
+
+        $this->img = str_replace('data:image/jpeg;base64,', '', $this->img);
+        $this->img = str_replace('data:image/png;base64,', '', $this->img);
+        $this->img = str_replace(' ', '+', $this->img);
+        $this->img = base64_decode($this->img);
+
+        if (empty($this->img)) {
+            throw new ClientException(_('No uploaded image data.'));
+        }
+
         return true;
     }
 
@@ -77,34 +88,38 @@ class ApiUpdateBackgroundImageAction extends ApiAuthAction
     {
         parent::handle();
 
-		$profile = $this->user->getProfile();
-		$base64img = $this->img;
-		if(stristr($base64img, 'image/jpeg')) {
-			$base64img_mime = 'image/jpeg';
-			}
-		elseif(stristr($base64img, 'image/png')) {
-			// should convert to jpg here!!
-			$base64img_mime = 'image/png';
-			}
-		$base64img = str_replace('data:image/jpeg;base64,', '', $base64img);
-		$base64img = str_replace('data:image/png;base64,', '', $base64img); 			 			
-		$base64img = str_replace(' ', '+', $base64img);
-		$base64img_hash = md5($base64img);
-		$base64img = base64_decode($base64img);
-		$base64img_basename = basename('bg');
-		$base64img_filename = File::filename($profile, $base64img_basename, $base64img_mime);
-		$base64img_path = File::path($base64img_filename);
-		$base64img_success = file_put_contents($base64img_path, $base64img);
-		$base64img_mimetype = MediaFile::getUploadedMimeType($base64img_path, $base64img_filename);
-		$mediafile = new MediaFile($profile, $base64img_filename, $base64img_mimetype);
- 		$imagefile = new ImageFile($mediafile->fileRecord->id, File::path($mediafile->filename));
-  		$imagefile->resizeTo(File::path($mediafile->filename), array('width'=>1280, 'height'=>1280, 'x'=>$this->cropX, 'y'=>$this->cropY, 'w'=>$this->cropW, 'h'=>$this->cropH));			
-		$result['url'] = File::url($mediafile->filename);
-		
-		Profile_prefs::setData($profile, 'qvitter', 'background_image', $result['url']);			
-					
+        $imagefile = null;
+
+        // put the image data in a temporary file
+        $fh = tmpfile();
+        fwrite($fh, $this->img);
+        unset($this->img);
+        fseek($fh, 0);  // go to beginning just to be sure the content is read properly
+
+        // We get a MediaFile with a File object using the filehandle
+        $mediafile = MediaFile::fromFilehandle($fh, $this->scoped);
+        // and can dispose of the temporary filehandle since we're certain we have a File on disk now
+        fclose($fh);
+
+        $imagefile = ImageFile::fromFileObject($mediafile->fileRecord);
+        unset($mediafile);  // No need to keep the MediaFile around anymore, everything we need is in ImageFile
+
+        // We're just using the Avatar function to build a filename here
+        // but we don't save it _as_ an avatar below... but in the same dir!
+        $filename = Avatar::filename(
+            $this->scoped->getID(),
+            image_type_to_extension($imagefile->preferredType()),
+            null,
+            'bg-'.common_timestamp()
+        );
+
+        $imagefile->resizeTo(Avatar::path($filename), array('width'=>1280, 'height'=>1280, 'x'=>$this->cropX, 'y'=>$this->cropY, 'w'=>$this->cropW, 'h'=>$this->cropH));
+		$result['url'] = Avatar::url($filename);
+
+		Profile_prefs::setData($this->scoped, 'qvitter', 'background_image', $result['url']);
+
         $this->initDocument('json');
         $this->showJsonObjects($result);
-        $this->endDocument('json');		
+        $this->endDocument('json');
     }
 }

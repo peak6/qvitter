@@ -37,11 +37,23 @@
   ·                                                                               ·
   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
+// plugins can add translatons to this object
+window.pluginTranslations = [];
+
 // object to keep old states of streams in, to speed up stream change
 window.oldStreams = new Object();
 
 // check our localStorage and make sure it's correct
 checkLocalStorage();
+
+// don't let users inject html/scripts into their own user data... not that it matters, it is only displayed to themselves, but just to be 200% safe
+window.loggedIn = iterateRecursiveReplaceHtmlSpecialChars(window.loggedIn);
+
+// hack to supress basic auth popup, e.g. if the user has to tabs open and
+// log out in one of them. but microsoft browsers doesn't support this
+if(typeof bowser.msie == 'undefined' && typeof bowser.msedge == 'undefined') {
+	window.apiRoot = window.apiRoot.replace('://','://x:x@');
+	}
 
 
 /* ·
@@ -53,11 +65,31 @@ checkLocalStorage();
 window.onpopstate = function(event) {
 	if(event && event.state) {
 		display_spinner();
-		setNewCurrentStream(event.state.strm,function(){
+		setNewCurrentStream(pathToStreamRouter(event.state.strm),false,false,function(){
 			remove_spinner();
-			},false);
+			});
 		}
 	}
+
+
+/* ·
+   ·
+   ·   Discard error messages
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','.discard-error-message',function(){
+
+	// don't nag on people
+	if($(this).parent().hasClass('language-error-message')) {
+		localStorageObjectCache_STORE('languageErrorMessageDiscarded',$(this).parent().attr('data-language-name'), true);
+		}
+
+	$(this).addClass('clicked');
+	$(this).closest('.error-message, .language-error-message').slideUp(100,function(){
+		$(this).remove();
+		});
+	});
 
 
 /* ·
@@ -65,6 +97,7 @@ window.onpopstate = function(event) {
    ·   welcome text expand and collapse
    ·
    · · · · · · · · · · · · · */
+
 $('body').on('click','.show-full-welcome-text, .front-welcome-text:not(.expanded) sup',function(){
 	$('.front-welcome-text').toggleClass('expanded');
 	if($('.front-welcome-text').hasClass('expanded')) {
@@ -88,6 +121,370 @@ $('body').on('click','.welcome-text-register-link',function(){
 
 /* ·
    ·
+   ·   Check for tooltips to display
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on({
+    mouseover: function (e) {
+		removeAllTooltips();
+
+		// convert title to tooltip
+		if($(e.target).is('[title]')) {
+			var titleAttribute = replaceHtmlSpecialChars($(e.target).attr('title')); // can contain malicious code
+			$(e.target).attr('data-tooltip',titleAttribute);
+			$(e.target).removeAttr('title');
+			}
+
+		// regular tooltips
+		if($(e.target).is('[data-tooltip]')) {
+
+			var tooltipClass = '';
+
+			tooltip_data = $(e.target).attr('data-tooltip');
+
+			// if embedded content is hidden, we show it in tooltips
+			if($('#feed-body').hasClass('embedded-content-hidden-by-user')
+			&& !$(e.target).is('.oembed-item')
+			&& $(e.target).closest('.queet').length > 0
+			&& $(e.target).closest('.queet').find('.oembed-item[href="' + $(e.target).attr('href') + '"]').length > 0) {
+				tooltip_data = $(e.target).closest('.queet').find('.oembed-item[href="' + $(e.target).attr('href') + '"]').html();
+				tooltipClass = 'oembed';
+				}
+			else if($('#feed-body').hasClass('embedded-content-hidden-by-user')
+			&& !$(e.target).is('.attachment-thumb')
+			&& $(e.target).closest('.queet').length > 0
+			&& $(e.target).text().indexOf('/attachment/') > -1) {
+				// local attachments has /attachment/-url in its href attribute
+				if($(e.target).closest('.queet').find('.thumb-container[data-local-attachment-url="' + $(e.target).attr('href') + '"]').length>0) {
+					tooltip_data = $(e.target).closest('.queet').find('.thumb-container[data-local-attachment-url="' + $(e.target).attr('href') + '"]').outerHTML();
+					tooltipClass = 'thumb';
+					}
+				// remote attachments are identified by full url
+				else if($(e.target).closest('.queet').find('.thumb-container[href="' + $(e.target).attr('data-tooltip') + '"]').length>0) {
+					tooltip_data = $(e.target).closest('.queet').find('.thumb-container[href="' + $(e.target).attr('data-tooltip') + '"]').outerHTML();
+					tooltipClass = 'thumb';
+					}
+				// sometimes the attachment link in the queet text does not give us any clue to
+				// which attachment it is referring to. but if it is the only link and there is
+				// exactly one attachment, we can safely assume that the link is referring to
+				// that attachment
+				else if($(e.target).closest('.queet').find('.thumb-container').length == 1
+					&& $(e.target).closest('.queet-text').find('a.attachment').length == 1) {
+					tooltip_data = $(e.target).closest('.queet').find('.thumb-container').outerHTML();
+					tooltipClass = 'thumb';
+					}
+				}
+			else if($('#feed-body').hasClass('quotes-hidden-by-user')
+			&& !$(e.target).is('.quote-link-container')
+			&& $(e.target).is('[data-quote-url]')
+			&& $(e.target).closest('.queet-text').find('.quote-link-container[data-quote-url="' + $(e.target).attr('data-quote-url') + '"]').length > 0) {
+				tooltip_data = $(e.target).closest('.queet-text').find('.quote-link-container[data-quote-url="' + $(e.target).attr('data-quote-url') + '"]').html();
+				tooltipClass = 'quote';
+				}
+
+			var tooltipElement = $('<div class="tooltip ' + tooltipClass + '" lang="' + window.selectedLanguage + '">' + tooltip_data + '</div>');
+			var tooltipCaret = $('<div class="tooltip-caret"></div>');
+			$('body').prepend(tooltipElement);
+			$('body').prepend(tooltipCaret);
+
+			// align tooltip to the hovered element
+			alignTooltipTohoveredElement(tooltipElement,tooltipCaret,$(e.target));
+
+			// fade in
+			tooltipElement.css('opacity','1');
+			tooltipCaret.css('opacity','1');
+			}
+    },
+    mouseleave: function (e) {
+		removeAllTooltips();
+    }
+});
+
+// tooltips should be removed very easily, e.g. when any of these events happen
+$('body').on("touchstart scroll click dblclick mousedown mouseup submit keydown keypress keyup", function(e){
+	removeAllTooltips();
+});
+
+// removes all tooltips
+function removeAllTooltips() {
+	$('.tooltip,.tooltip-caret').remove();
+	}
+
+
+/* ·
+   ·
+   ·   Check for profile hovercards to display
+   ·
+   · · · · · · · · · · · · · */
+
+window.userArrayLastRetrieved = new Object();
+$('body').on('mouseover',function (e) {
+
+	// no hovercards on these elements
+	if($(e.target).is('#user-queets') || $(e.target).closest('a').is('#user-queets')
+	|| $(e.target).is('.tweet-stats') || $(e.target).closest('a').is('.tweet-stats')) {
+		return true;
+		}
+
+	var timeNow = new Date().getTime();
+	removeAllhoverCards(e,timeNow);
+	var hoverCardData = false;
+	var userArray = false;
+	var hrefAttr = false;
+	var possibleNickname = false;
+
+	// closest a-element with a href
+	if($(e.target).is('[href]')) {
+		var targetElement = $(e.target);
+		}
+	else if($(e.target).closest('a').length>0) {
+		if($(e.target).closest('a').is('[href]')) {
+			var targetElement = $(e.target).closest('a');
+			}
+		else {
+			var targetElement = $(e.target);
+			}
+		}
+	else {
+		var targetElement = $(e.target);
+		}
+
+	// get href-attribute
+	if(targetElement.is('[href]')) {
+		hrefAttr = targetElement.attr('href');
+		}
+	else {
+		return true;
+		}
+
+	// no hover card if the element has the no-hover-card class
+	if(targetElement.hasClass('no-hover-card')) {
+		return true;
+		}
+
+	// no hovercard for anchor links
+	if(hrefAttr.substring(0,1) == '#') {
+		return true;
+		}
+
+	// guess what element close by could be a nickname
+	if($(e.target).is('[href]')) {
+		possibleNickname = $(e.target).text();
+		}
+	else if($(e.target).closest('a').length>0 && $(e.target).closest('a').is('[href]')) {
+		if($(e.target).siblings('.screen-name').length>0) { // the screen name can be in a sibling if we're lucky
+			possibleNickname = $(e.target).siblings('.screen-name').text();
+			}
+		else {
+			possibleNickname = $(e.target).text();
+			}
+		}
+
+	// see if we have it in cache, otherwise query server
+	getUserArrayData(hrefAttr, possibleNickname, timeNow, targetElement, function(userArray, timeOut){
+
+		// bad data
+		if(typeof userArray.local == 'undefined') {
+			return;
+			}
+
+		// build card from either the local or external data, depending on what we got
+		if (userArray.local !== null && userArray.local.is_local == true) {
+			var profileCard = buildProfileCard(userArray.local);
+			}
+		else if(userArray.local !== null && userArray.local.is_local == false && (typeof userArray.external == 'undefined' || userArray.external === null || userArray.external === false)) {
+			var profileCard = buildProfileCard(userArray.local);
+			}
+		else if ((userArray.local === null || userArray.local === false || userArray.local.is_local == false) && typeof userArray.external != 'undefined' && userArray.external !== false && userArray.external !== null) {
+			var profileCard = buildExternalProfileCard(userArray);
+			}
+		else {
+			console.log('could not build profile card...');
+			return;
+			}
+
+		var hoverCardElement = $('<div id="hover-card-' + timeNow + '" class="hover-card" data-card-created="' + timeNow + '">' + profileCard.profileCardHtml + '</div>');
+		var hoverCardCaret = $('<div id="hover-card-caret-' + timeNow + '" class="hover-card-caret"></div>');
+
+		targetElement.attr('data-awaiting-hover-card',timeNow);
+
+		// let user hover for 600ms before showing the card
+		setTimeout(function(){
+			// make sure user is still hovering the same link and that that the link awaits the same hover card
+			// (user can have flickered on and off the link triggering two or more hover cards to in setTimeout delay)
+			if(targetElement.is(":hover") && parseInt(targetElement.attr('data-awaiting-hover-card'),10) == timeNow) {
+				if($('.hover-card').length == 0) {	// no card if there already is one open
+					$('body').prepend(hoverCardElement);
+					$('body').prepend(hoverCardCaret);
+					targetElement.attr('data-hover-card-active',timeNow);
+
+					// if the user array has not been retrieved from the server for the last 60 seconds,
+					// we query it for the lastest data
+					if((typeof window.userArrayLastRetrieved[hrefAttr] == 'undefined') || (timeNow - window.userArrayLastRetrieved[hrefAttr]) > 60000) {
+						window.userArrayLastRetrieved[hrefAttr] = timeNow;
+
+						// local users
+						if(userArray.local !== null && userArray.local.is_local === true) {
+							getFromAPI('users/show.json?id=' + userArray.local.screen_name, function(data){
+								if(data) {
+									var newProfileCard = buildProfileCard(data);
+									hoverCardElement.html(newProfileCard.profileCardHtml);
+									alignTooltipTohoveredElement(hoverCardElement,hoverCardCaret,targetElement);
+									}
+								});
+							}
+
+						// external users
+						else if(userArray.local === null || userArray.local.is_local === false) {
+							getFromAPI('qvitter/external_user_show.json?profileurl=' + encodeURIComponent(hrefAttr),function(data){
+								if(data && data.external !== null) {
+									var newProfileCard = buildExternalProfileCard(data);
+									hoverCardElement.html(newProfileCard.profileCardHtml);
+									alignTooltipTohoveredElement(hoverCardElement,hoverCardCaret,targetElement);
+									}
+								});
+							}
+						}
+
+					// hide tooltips
+					$('.tooltip,.tooltip-caret').remove();
+
+					// align hover card to the hovered element
+					alignTooltipTohoveredElement(hoverCardElement,hoverCardCaret,targetElement);
+
+					// fade in
+					hoverCardElement.css('opacity','1');
+					hoverCardCaret.css('opacity','1');
+					}
+				}
+			},timeOut);
+		});
+	});
+
+// get user array from cache (or from server)
+function getUserArrayData(maybeProfileUrl,maybeNickname,timeNow,targetElement,callback) {
+	if(maybeProfileUrl && maybeNickname) {
+
+		userArray = userArrayCacheGetByProfileUrlAndNickname(maybeProfileUrl, maybeNickname);
+
+		// no cached user array found, query server if this seems to be a profile url
+		if(!userArray) {
+
+			var streamObject = URLtoStreamRouter(maybeProfileUrl);
+
+			// pathToStreamRouter failed finding a local stream for this path, maybe it's a remote profile?
+			if(streamObject === false) {
+				// we don't want to query the server every time we just pass an a-element with the cursor, so if the user
+				// hovers the element for, say, 200ms we ask the server if the link could be a remote profile
+				setTimeout(function(){
+					if(targetElement.is(":hover")) {
+						// don't try this if we already tried it less than a minute ago
+						if((typeof window.userArrayLastRetrieved[maybeProfileUrl] == 'undefined') || (timeNow - window.userArrayLastRetrieved[maybeProfileUrl]) > 60000) {
+							window.userArrayLastRetrieved[maybeProfileUrl] = timeNow;
+							getFromAPI('qvitter/external_user_show.json?profileurl=' + encodeURIComponent(maybeProfileUrl),function(data){
+								if(data && data.external !== null) {
+
+									// we want hover cards to appear _at least_ 600ms after hover (see below)
+									var timeAfterServerQuery = new Date().getTime();
+									var queryTime = timeAfterServerQuery-timeNow;
+									if(queryTime<600) {
+										var timeOut = 600-queryTime;
+										}
+									else {
+										var timeOut = 0;
+										}
+
+									callback(data,timeOut);
+									}
+								});
+							}
+						}
+					},200);
+				}
+			// likely an uncached local profile
+			else if(streamObject && (streamObject.name == 'profile' || streamObject.name == 'profile by id')) {
+
+				var nicknameOrId = streamObject.nickname;
+				if(!nicknameOrId) {
+					nicknameOrId = streamObject.id;
+					}
+				// don't query too often for the same user
+				if(typeof window.userArrayLastRetrieved[maybeProfileUrl] == 'undefined' || (timeNow - window.userArrayLastRetrieved[maybeProfileUrl]) > 60000) {
+					window.userArrayLastRetrieved[maybeProfileUrl] = timeNow;
+					// query server and cache user data (done automatically in getFromAPI)
+					getFromAPI('users/show.json?id=' + nicknameOrId, function(data){
+						if(data) {
+							userArray = {local:data};
+
+							// we want hover cards to appear _at least_ 600ms after hover
+							// we could just set the timeout to 0 and let the card appear
+							// whenever it's loaded, but this will not feel good if we're
+							// on a crazy fast server. so we calculate the diff time and makes
+							// sure the total delay is at least 600ms
+							var timeAfterServerQuery = new Date().getTime();
+							var queryTime = timeAfterServerQuery-timeNow;
+							if(queryTime<600) {
+								var timeOut = 600-queryTime;
+								}
+							else {
+								var timeOut = 0;
+								}
+
+							// continue to display the hover card
+							callback(userArray,timeOut);
+							}
+						});
+					}
+				}
+			}
+		// from cache
+		else {
+			// continue to display the hover card
+			// 600ms before cards appear feels pretty good
+			// but this can be tweaked if cards appear to fast/slow
+			callback(userArray,600);
+			}
+		}
+	}
+
+// hover cards should be removed very easily, e.g. when any of these events happen
+$('body').on("mouseleave touchstart scroll click dblclick mousedown mouseup submit keydown keypress keyup", function(e){
+	var timeNow = new Date().getTime();
+	removeAllhoverCards(e,timeNow);
+});
+
+// removes all hover cards
+function removeAllhoverCards(event,priorTo) {
+	// don't remove hovercards until after 100ms, so user have time to move the cursor to it (which gives it the dont-remove-card class)
+	setTimeout(function(){
+		$.each($('.hover-card'),function(){
+			// don't remove card if it was created after removeAllhoverCards() was called
+			if($(this).data('card-created') < priorTo) {
+				// don't remove it if we're hovering it right now!
+				if(!$(this).hasClass('dont-remove-card')) {
+					$('[data-hover-card-active="' + $(this).data('card-created') + '"]').removeAttr('data-hover-card-active');
+					$('#hover-card-caret-' + $(this).data('card-created')).remove();
+					$(this).remove();
+					}
+				}
+			});
+		},100);
+	}
+
+// if we're hovering a hover card, give it a class, so we don't remove it
+$('body').on('mouseover','.hover-card', function(e) {
+	$(this).addClass('dont-remove-card');
+	});
+$('body').on('mouseleave','.hover-card', function(e) {
+	$(this).removeClass('dont-remove-card');
+	});
+
+
+
+
+/* ·
+   ·
    ·   fix login and register box to top when they reach top
    ·
    · · · · · · · · · · · · · */
@@ -102,10 +499,11 @@ $(window).scroll(function(e){
 		}
 
 	if ($(this).scrollTop() > (feedOrProfileCardOffsetTop-55) && $('#login-content').css('position') != 'fixed'){
-		$('#login-content, .front-signup').not('#popup-signup').css({'position': 'fixed', 'top': '55px'});
+		var loginAndSignUpBoxesHeight = $('#login-content').outerHeight() + $('.front-signup').not('#popup-signup').outerHeight();
+		$('#login-register-container').css({'position': 'fixed', 'top': '55px'});
 		}
 	else if ($(this).scrollTop() < (feedOrProfileCardOffsetTop-55) && $('#login-content').css('position') != 'absolute'){
-		$('#login-content, .front-signup').not('#popup-signup').css({'position': 'absolute', 'top': 'auto'});
+		$('#login-register-container').css({'position': 'relative', 'top': 'auto'});
 		}
  	});
 
@@ -122,6 +520,19 @@ $('body').on('mouseenter','#federated-tooltip',function(){
 	});
 $('body').on('mouseleave','#what-is-federation',function(){
 	$('#what-is-federation').fadeOut(100);
+	});
+
+
+
+/* ·
+   ·
+   ·   Scroll to top when clicking top bar
+   ·
+   · · · · · · · · · · · · · */
+$('body').on('click','.global-nav',function(e) {
+	if($(e.target).hasClass('global-nav')) {
+		$(window).scrollTop(0);
+		}
 	});
 
 
@@ -160,19 +571,51 @@ if(!window.registrationsClosed) {
 			// ask api if nickname is ok, if no typing for 1 s
 			$('#signup-user-nickname-step2').on('keyup',function(){
 				clearTimeout(window.checkNicknameTimeout);
-				if($('#signup-user-nickname-step2').val().length>1 && /^[a-zA-Z0-9]+$/.test($('#signup-user-nickname-step2').val())) {
-					$('#signup-user-nickname-step2').addClass('nickname-taken');
+				var thisInputElement = $(this);
+				var thisValue = $(this).val();
+				if(thisValue.length>1 && /^[a-zA-Z0-9]+$/.test(thisValue)) {
+					thisInputElement.addClass('nickname-taken');
 					if($('.spinner-wrap').length==0) {
-						$('#signup-user-nickname-step2').after('<div class="spinner-wrap"><div class="spinner"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>');
+						thisInputElement.after('<div class="spinner-wrap"><div class="spinner"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>');
 						}
 					window.checkNicknameTimeout = setTimeout(function(){
-						$.get(window.apiRoot + 'check_nickname.json?nickname=' + encodeURIComponent($('#signup-user-nickname-step2').val()),function(data){
+						$.get(window.apiRoot + 'check_nickname.json?nickname=' + encodeURIComponent(thisValue),function(data){
 							$('.spinner-wrap').remove();
 							if(data==0) {
 								$('#signup-user-password2-step2').trigger('keyup'); // revalidates
 								}
 							else {
-								$('#signup-user-nickname-step2').removeClass('nickname-taken');
+								thisInputElement.removeClass('nickname-taken');
+								$('#signup-user-password2-step2').trigger('keyup');
+								}
+							});
+						},1000);
+					}
+				else {
+					$('.spinner-wrap').remove();
+					}
+				});
+
+			// ask api if email is in use, if no typing for 1 s
+			$('#signup-user-email-step2').on('keyup',function(){
+				clearTimeout(window.checkEmailTimeout);
+				var thisInputElement = $(this);
+				var thisValue = $(this).val();
+				if(thisValue.length>1 && validEmail(thisValue)) {
+					thisInputElement.addClass('email-in-use');
+					if($('.spinner-wrap').length==0) {
+						thisInputElement.after('<div class="spinner-wrap"><div class="spinner"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>');
+						}
+					window.checkEmailTimeout = setTimeout(function(){
+						$.get(window.apiRoot + 'qvitter/check_email.json?email=' + encodeURIComponent(thisValue),function(data){
+							$('.spinner-wrap').remove();
+							if(data==1) {
+								$('#signup-user-password2-step2').trigger('keyup'); // revalidates
+								thisInputElement.after('<div class="fieldhelp email-in-use">' + window.sL.emailAlreadyInUse + '</div>');
+								}
+							else {
+								thisInputElement.removeClass('email-in-use');
+								thisInputElement.siblings('.fieldhelp.email-in-use').remove();
 								$('#signup-user-password2-step2').trigger('keyup');
 								}
 							});
@@ -184,19 +627,18 @@ if(!window.registrationsClosed) {
 				});
 
 
-			// validate on keyup
-			$('#popup-register input').on('keyup',function(){
-				if(validateRegisterForm($('#popup-register'))) {
-					if(!$('#signup-user-nickname-step2').hasClass('nickname-taken')) {
+			// validate on keyup / paste / blur
+			$('#popup-register input').on('keyup paste blur',function(){
+				setTimeout(function () { // defer validation as after paste the content is not immediately available
+					if(validateRegisterForm($('#popup-register'))
+					&& !$('#signup-user-nickname-step2').hasClass('nickname-taken')
+					&& !$('#signup-user-email-step2').hasClass('email-in-use')) {
 						$('#signup-btn-step2').removeClass('disabled');
 						}
 					else {
 						$('#signup-btn-step2').addClass('disabled');
 						}
-					}
-				else {
-					$('#signup-btn-step2').addClass('disabled');
-					}
+				}, 0);
 				});
 			$('#popup-register input').trigger('keyup');
 
@@ -227,7 +669,14 @@ if(!window.registrationsClosed) {
 							username: 		'none',
 							},
 						dataType:"json",
-						error: function(data){ console.log('error'); console.log(data); },
+						error: function(data){
+							if(typeof data.responseJSON != 'undefined' && typeof data.responseJSON.error != 'undefined') {
+								remove_spinner();
+								$('#popup-register input,#popup-register button').removeClass('disabled');
+								$('#signup-user-password2-step2').trigger('keyup'); // revalidate
+								showErrorMessage(data.responseJSON.error,$('#popup-register .modal-header'));
+								}
+							},
 						success: function(data) {
 							remove_spinner();
 							if(typeof data.error == 'undefined') {
@@ -334,52 +783,79 @@ $(window).load(function() {
 
 	// check that the language is available,
 	if(typeof window.availableLanguages[window.selectedLanguage] == 'undefined') {
+		var similarLanguageFound = false;
 		// if not there might be a base language, e.g. "sv" instead of "sv_se"
-		if(typeof window.availableLanguages[window.selectedLanguage.substring(0,2)] != 'undefined') {
-			window.selectedLanguage = window.selectedLanguage.substring(0,2);
+		if(window.selectedLanguage.indexOf('_') > -1
+		&& typeof window.availableLanguages[window.selectedLanguage.substring(0,window.selectedLanguage.indexOf('_'))] != 'undefined') {
+			window.selectedLanguage = window.selectedLanguage.substring(0,window.selectedLanguage.indexOf('_'));
+			similarLanguageFound = true;
 			}
 		else {
 			// there's also a chance there no base language, but a similar country specific language that we can use (rather than english)
-			var similarLanguageFound = false;
+			if(window.selectedLanguage.indexOf('_') > -1) {
+				var baseLan = window.selectedLanguage.indexOf('_');
+				}
+			else {
+				var baseLan = window.selectedLanguage;
+				}
 			$.each(window.availableLanguages, function(lanCode,lanData){
-				if(lanCode.substring(0,2) == window.selectedLanguage.substring(0,2)) {
+				if(lanCode.substring(0,lanCode.indexOf('_')) == baseLan) {
 					window.selectedLanguage = lanCode;
 					similarLanguageFound = true;
 					return false;
 					}
 				});
-			// if we can't find a similar language, go with english
-			if(similarLanguageFound === false) {
-				window.selectedLanguage = 'en';
-				}
+			}
+		// if we can't find a similar language, go with english
+		if(similarLanguageFound === false) {
+			window.selectedLanguage = 'en';
 			}
 		}
 
-	// if we already have this version of this language in localstorage, we
-	// use that cached version. we do this because $.ajax doesn't respect caching, it seems
-	var cacheData = localStorageObjectCache_GET('languageData',window.availableLanguages[window.selectedLanguage]);
-	if(cacheData) {
-		proceedToSetLanguageAndLogin(cacheData);
+	// english is always available
+	if(window.selectedLanguage == 'en') {
+		proceedToSetLanguageAndLogin(window.englishLanguageData);
 		}
 	else {
-		$.ajax({
-			dataType: "json",
-			url: window.fullUrlToThisQvitterApp + 'locale/' + window.availableLanguages[window.selectedLanguage],
-			error: function(data){console.log(data)},
-			success: function(data) {
+		// if we already have this version of this language in localstorage, we
+		// use that cached version. we do this because $.ajax doesn't respect caching, it seems
+		var cacheData = localStorageObjectCache_GET('languageData',window.availableLanguages[window.selectedLanguage]);
+		if(cacheData) {
+			proceedToSetLanguageAndLogin(cacheData);
+			}
+		else {
+			$.ajax({
+				dataType: "json",
+				url: window.fullUrlToThisQvitterApp + 'locale/' + window.availableLanguages[window.selectedLanguage],
+				error: function(data){console.log(data)},
+				success: function(data) {
 
-				// store this response in localstorage
-				localStorageObjectCache_STORE('languageData',window.availableLanguages[window.selectedLanguage], data);
+					// store this response in localstorage
+					localStorageObjectCache_STORE('languageData',window.availableLanguages[window.selectedLanguage], data);
 
-				proceedToSetLanguageAndLogin(data);
-				}
-			});
+					proceedToSetLanguageAndLogin(data);
+					}
+				});
+			}
 		}
 	});
 
 // proceed to set language and login
 function proceedToSetLanguageAndLogin(data){
 	window.sL = data;
+
+	// plugins might have added translations
+	$.each(window.pluginTranslations,function(k,pluginTranslation) {
+		if(typeof pluginTranslation[window.selectedLanguage] != 'undefined') {
+			$.extend(window.sL,pluginTranslation[window.selectedLanguage]);
+			}
+		else if(typeof pluginTranslation['en'] != 'undefined') {
+			$.extend(window.sL,pluginTranslation['en']);
+			}
+		});
+
+	// plugins might want to wait and do stuff until after language is set
+	$(document).trigger('qvitterAfterLanguageIsSet');
 
 	// if this is a RTL-language, add rtl class to body
 	if(window.sL.directionality == 'rtl') {
@@ -394,6 +870,29 @@ function proceedToSetLanguageAndLogin(data){
 		window.sL[k] = v.replace(/{site-title}/g,window.siteTitle);
 		});
 
+	// suggest user to help translate if their browsers language does't exist
+	if(typeof window.availableLanguages[window.usersLanguageCode] == 'undefined' && !localStorageObjectCache_GET('languageErrorMessageDiscarded',window.usersLanguageNameInEnglish)) { // but don't nag
+		$('#page-container').prepend('<div class="language-error-message" data-language-name="' + window.usersLanguageNameInEnglish + '">' + window.siteTitle + ' is not availible in your language (' + replaceHtmlSpecialChars(window.usersLanguageNameInEnglish) + '). Visit <a href="https://git.gnu.io/h2p/Qvitter/tree/master/locale">Qvitter\'s repository homepage</a> if you want to help us to translate the interface. <span class="discard-error-message"></span></div>');
+		}
+
+	// if selected language is too similar to english, we display a message telling people to help with the translation
+	if(window.sL.languageName != 'English') {
+		var numberOfStringsSameAsEnglish = 0;
+		var totalStrings = 0;
+		$.each(window.sL,function(k,v){
+			if(v == window.englishLanguageData[k]) {
+				numberOfStringsSameAsEnglish++;
+				}
+			totalStrings++;
+			});
+		numberOfStringsSameAsEnglish = Math.max(0, numberOfStringsSameAsEnglish-20); totalStrings = Math.max(0, totalStrings-20); // ~20 strings, e.g. shortened months, is often same in many languages
+		var percentTranslated = parseInt((1-(numberOfStringsSameAsEnglish/totalStrings))*100,10);
+		if(percentTranslated < 95) {
+			if(!localStorageObjectCache_GET('languageErrorMessageDiscarded',window.sL.languageName)) { // but don't nag
+				$('#page-container').prepend('<div class="language-error-message" data-language-name="' + window.sL.languageName + '">' + window.sL.onlyPartlyTranslated.replace('{percent}',percentTranslated).replace('{language-name}',window.sL.languageName) + '<span class="discard-error-message"></span></div>');
+				}
+			}
+		}
 
 	// set some static strings
 	if(window.customWelcomeText !== false && typeof window.customWelcomeText[window.selectedLanguage] != 'undefined') {
@@ -412,6 +911,7 @@ function proceedToSetLanguageAndLogin(data){
 			$('.front-welcome-text').append(window.sL.welcomeText);
 			}
 		}
+
 	$('#nickname').attr('placeholder',window.sL.loginUsername);
 	$('#password').attr('placeholder',window.sL.loginPassword);
 	$('button#submit-login').html(window.sL.loginSignIn);
@@ -429,149 +929,120 @@ function proceedToSetLanguageAndLogin(data){
 	$('#queet-box').html(window.sL.compose);
 	$('#queet-box').attr('data-start-text',encodeURIComponent(window.sL.compose));
 	$('#user-footer .queet-button button').html(window.sL.queetVerb);
-	$('#feed-header-inner h2').html(window.sL.queetsNounPlural);
+	$('#stream-header').html(window.sL.queetsNounPlural);
 	$('#logout').html(window.sL.logout);
 	$('#settings').html(window.sL.settings);
 	$('#other-servers-link').html(window.sL.otherServers);
 	$('.language-dropdown .dropdown-toggle small').html(window.sL.languageSelected);
 	$('.language-dropdown .current-language').html(window.sL.languageName);
-	$('.stream-selection[data-stream-name="statuses/friends_timeline.json"]').prepend(window.sL.timeline);
-	$('.stream-selection[data-stream-name="statuses/friends_timeline.json"]').attr('data-stream-header',window.sL.timeline);
-	$('.stream-selection[data-stream-name="statuses/mentions.json"]').prepend(window.sL.mentions);
-	$('.stream-selection[data-stream-name="statuses/mentions.json"]').attr('data-stream-header',window.sL.mentions);
-	$('.stream-selection[data-stream-name="qvitter/statuses/notifications.json"]').prepend(window.sL.notifications);
-	$('.stream-selection[data-stream-name="qvitter/statuses/notifications.json"]').attr('data-stream-header',window.sL.notifications);
-	$('.stream-selection[data-stream-name="favorites.json"]').prepend(window.sL.favoritesNoun);
-	$('.stream-selection[data-stream-name="favorites.json"]').attr('data-stream-header',window.sL.favoritesNoun);
-	$('.stream-selection[data-stream-name="statuses/public_timeline.json"]').prepend(window.sL.publicTimeline);
-	$('.stream-selection[data-stream-name="statuses/public_timeline.json"]').attr('data-stream-header',window.sL.publicTimeline);
-	$('.stream-selection[data-stream-name="statuses/public_and_external_timeline.json"]').prepend(window.sL.publicAndExtTimeline);
-	$('.stream-selection[data-stream-name="statuses/public_and_external_timeline.json"]').attr('data-stream-header',window.sL.publicAndExtTimeline);
+	$('.stream-selection.friends-timeline').prepend(window.sL.timeline);
+	$('.stream-selection.mentions').prepend(window.sL.mentions);
+	$('.stream-selection.notifications').prepend(window.sL.notifications);
+	$('.stream-selection.favorites').prepend(window.sL.favoritesNoun);
+	$('.stream-selection.public-timeline').prepend(window.sL.publicTimeline);
+	$('.stream-selection.public-and-external-timeline').prepend(window.sL.publicAndExtTimeline)
 	$('#search-query').attr('placeholder',window.sL.searchVerb);
+	$('#blocking-link').html(window.sL.userBlocks);
 	$('#faq-link').html(window.sL.FAQ);
+	$('#tou-link').html(window.sL.showTerms);
+	$('#add-edit-language-link').html(window.sL.addEditLanguageLink);
 	$('#shortcuts-link').html(window.sL.keyboardShortcuts);
 	$('#invite-link').html(window.sL.inviteAFriend);
-	$('#classic-link').html('Classic ' + window.siteTitle);
+	$('#classic-link').html(window.sL.classicInterface);
 	$('#edit-profile-header-link').html(window.sL.editMyProfile);
-	$('#mini-edit-profile-button').attr('title',window.sL.editMyProfile);
+	$('#mini-logged-in-user-cog-wheel').attr('data-tooltip',window.sL.profileSettings);
+	$('#accessibility-toggle-link').html(window.sL.accessibilityToggleLink);
+	$('#settingslink .nav-session').attr('data-tooltip',window.sL.profileAndSettings);
+	$('#top-compose').attr('data-tooltip',window.sL.compose);
+	$('button.upload-image').attr('data-tooltip',window.sL.tooltipAttachImage);
+	$('button.shorten').attr('data-tooltip',window.sL.tooltipShortenUrls);
+	$('.reload-stream').attr('data-tooltip',window.sL.tooltipReloadStream);
+	$('#clear-history').html(window.sL.clearHistory);
+	$('#user-screen-name, #user-avatar, #user-name').attr('data-tooltip', window.sL.viewMyProfilePage);
+	$('#top-menu-profile-link-view-profile').html(window.sL.viewMyProfilePage);
 
 	// show site body now
 	$('#user-container').css('display','block');
 	$('#feed').css('display','block');
 
-	// login or not
+	// logged in or not?
 	if(window.loggedIn) {
-		doLogin(getStreamFromUrl());
+		proceedLoggedIn();
 		}
 	else {
-		display_spinner();
-		window.currentStream = ''; // force reload stream
-		setNewCurrentStream(getStreamFromUrl(),function(){
-			logoutWithoutReload(false);
-			remove_spinner();
-			},true);
+		proceedLoggedOut();
 		}
 	}
 
 /* ·
    ·
-   ·   Login action
+   ·   Stuff we do on load specifically for logged out users
    ·
    · · · · · · · · · · · · · */
 
-$('#form_login').submit(function(e) {
-	if(typeof window.loginCheckSuccessful == 'undefined') {
-		e.preventDefault();
-		checkLogin($('input#nickname').val(),$('input#password').val(),function(data){
-			window.loginCheckSuccessful = true;
-			$('#form_login').submit();
-			});
-		}
-	});
+function proceedLoggedOut() {
+	display_spinner();
+	setNewCurrentStream(getStreamFromUrl(),true,false,function(){
+		$('input#nickname').focus();
+		$('#page-container').css('opacity','1');
+		});
+	}
 
-function doLogin(streamToSet) {
-	$('#submit-login').attr('disabled','disabled');
-	$('#submit-login').focus(); // prevents submit on enter to close alert-popup on wrong credentials
+/* ·
+   ·
+   ·   Stuff we do on load specifically for logged in users
+   ·
+   · · · · · · · · · · · · · */
+
+function proceedLoggedIn() {
 	display_spinner();
 
-		// add user data to DOM, show search form, remeber user id, show the feed
-		$('#user-container').css('z-index','1000');
-		$('#top-compose').removeClass('hidden');
-		$('#qvitter-notice').show();
-		$('#user-avatar').attr('src', window.loggedIn.profile_image_url_profile_size);
-		$('#settingslink .nav-session').css('background-image', 'url(\'' + window.loggedIn.profile_image_url_profile_size + '\')');
-		$('#user-header').attr('title', window.sL.viewMyProfilePage);
-		$('#user-name').append(window.loggedIn.name);
-		$('#user-screen-name').append(window.loggedIn.screen_name);
-		$('#user-queets strong').html(window.loggedIn.statuses_count);
-		$('#user-following strong').html(window.loggedIn.friends_count);
-		$('#user-followers strong').html(window.loggedIn.followers_count);
-		$('#user-groups strong').html(window.loggedIn.groups_count);
-		$('.stream-selection.friends-timeline').attr('href', window.loggedIn.statusnet_profile_url + '/all');
-		$('.stream-selection.mentions').attr('href', window.loggedIn.statusnet_profile_url + '/replies');
-		$('.stream-selection.notifications').attr('href', window.loggedIn.statusnet_profile_url + '/notifications');
-		$('.stream-selection.my-timeline').attr('href', window.loggedIn.statusnet_profile_url);
-		$('.stream-selection.favorites').attr('href', window.loggedIn.statusnet_profile_url + '/favorites');
-		window.myUserID = window.loggedIn.id;
-		if(window.loggedIn.cover_photo !== false) {
-			$('#user-header').css('background-image','url(\'' + window.loggedIn.cover_photo + '\')');
-			}
+	// get everyone we follow, block and our memberships and stor in global objects
+	getAllFollowsMembershipsAndBlocks(function(){
 
-		// get all users i'm following for autosuggestion
-		window.following = new Array();
-		getFromAPI('qvitter/allfollowing/' + window.loggedIn.screen_name + '.json',function(data){
-			if(data) {
-				var i=0;
-				$.each(data,function(k,v){
-					if(v[2] === false) { var avatar = window.defaultAvatarStreamSize; }
-					else { 	var avatar = v[2]; }
-					if(v[3]) {
-						// extract server base url
-						v[3] = v[3].substring(v[3].indexOf('://')+3,v[3].lastIndexOf(v[1])-1);
-						}
-					v[0] = v[0] || v[1]; // if name is null we go with username there too
-					window.following[i] = { 'id': k,'name': v[0], 'username': v[1],'avatar': avatar, 'url':v[3] };
-					i++;
-					});
+		// do this now not to stall slow computers, also we know of group memberships to highlight now
+		cacheSyntaxHighlighting();
 
-				cacheSyntaxHighlighting(); // do this now not to stall slow computers
+		// we might have cached text for the queet box
+		// (we need to get the mentions suggestions and cache the syntax highlighting before doing this)
+		$('#queet-box').attr('data-cached-text',encodeURIComponent(localStorageObjectCache_GET('queetBoxInput','queet-box')));
+		maybePrefillQueetBoxWithCachedText($('#queet-box'));
+		});
 
-				// we might have cached text for the queet box
-				// (we need to get the mentions suggestions and cache the syntax highlighting before doing this)
-				var cachedQueetBoxData = localStorageObjectCache_GET('queetBoxInput','queet-box');
-				var cachedQueetBoxDataText = $('<div/>').html(cachedQueetBoxData).text();
-			    if(cachedQueetBoxData) {
-					queetBox = $('#queet-box');
-		            queetBox.click();
-		            queetBox.html(cachedQueetBoxData);
-		            setSelectionRange(queetBox[0], cachedQueetBoxDataText.length, cachedQueetBoxDataText.length);
-		            queetBox.trigger('input');
-					}
-				}
-			});
+	// load history
+	loadHistoryFromLocalStorage();
 
-		// load history
-		loadHistoryFromLocalStorage();
+	// show bookmarks
+	appendAllBookmarks(window.qvitterProfilePrefs.bookmarks);
 
-		// set stream
-		window.currentStream = ''; // always reload stream on login
-		setNewCurrentStream(streamToSet,function(){
-			$('.language-dropdown').css('display','none');
-			$('#user-header').animate({opacity:'1'},800);
-			$('#user-body').animate({opacity:'1'},800);
-			$('#user-footer').animate({opacity:'1'},800);
-			$('.menu-container').animate({opacity:'1'},800);
-			$('#page-container').animate({opacity:'1'},200);
-			$('#search').fadeIn('slow');
-			$('#login-content').css('display','none');
-			$('.front-signup').css('display','none');
-			$('#settingslink .dropdown-toggle').fadeIn('slow');
-			$('#top-compose').fadeIn('slow');
-			$('input#nickname').blur();
-			remove_spinner();
-			},true);
+	// set stream
+	setNewCurrentStream(getStreamFromUrl(),true,false,function(){
+		$('.language-dropdown').css('display','none');
+		$('#page-container').css('opacity','1');
+		$('#search').fadeIn('slow');
+		$('#settingslink .dropdown-toggle').fadeIn('slow');
+		$('#top-compose').fadeIn('slow');
+		$('input#nickname').blur();
+		});
 
 	}
+
+
+/* ·
+   ·
+   ·   Shake the login box, i.e. when indicating an error
+   ·
+   · · · · · · · · · · · · · */
+
+function shakeLoginBox() {
+	$('input#nickname').css('background-color','pink');
+	$('input#password').css('background-color','pink');
+	$('#login-content').effect('shake',{distance:5,times:2},function(){
+		$('input#nickname').animate({backgroundColor:'#fff'},1000);
+		$('input#password').animate({backgroundColor:'#fff'},1000);
+		});
+	}
+
 
 
 /* ·
@@ -591,6 +1062,21 @@ $('#rememberme_label').click(function(){
 $('#rememberme_label').disableSelection();
 
 
+/* ·
+   ·
+   ·   Submit login form
+   ·
+   · · · · · · · · · · · · · */
+
+$('#form_login').submit(function(e) {
+	if(typeof window.loginCheckSuccessful == 'undefined') {
+		e.preventDefault();
+		checkLogin($('input#nickname').val(),$('input#password').val(),function(data){
+			window.loginCheckSuccessful = true;
+			$('#form_login').submit();
+			});
+		}
+	});
 
 
 /* ·
@@ -618,6 +1104,25 @@ $('#faq-link').click(function(){
 	});
 
 
+/* ·
+   ·
+   ·   Terms
+   ·
+   · · · · · · · · · · · · · */
+
+$('#tou-link,.tou-link').click(function(){
+	popUpAction('popup-terms', window.sL.showTerms,'<div id="terms-container"></div>',false);
+	if(window.customTermsOfUse) {
+		$('#terms-container').html(window.customTermsOfUse);
+		}
+	else {
+		getDoc('terms',function(termsHtml){
+			$('#terms-container').html(termsHtml);
+			});
+		}
+	});
+
+
 
 /* ·
    ·
@@ -625,7 +1130,7 @@ $('#faq-link').click(function(){
    ·
    · · · · · · · · · · · · · */
 
-$('#classic-link').click(function(){
+$('#classic-link, #accessibility-toggle-link').click(function(){
 	getFromAPI('qvitter/toggle_qvitter.json',function(data){
 		if(data.success === true) {
 			window.location.href = window.siteInstanceURL + window.loggedIn.screen_name + '/all';
@@ -633,35 +1138,6 @@ $('#classic-link').click(function(){
 		});
 
 	});
-
-
-
-/* ·
-   ·
-   ·   Do a logout without reloading, i.e. on login errors
-   ·
-   · · · · · · · · · · · · · */
-
-function logoutWithoutReload(doShake) {
-
-	$('input#nickname').focus();
-	$('.front-signup').animate({opacity:'1'},200);
-	if(doShake) {
-		$('input#nickname').css('background-color','pink');
-		$('input#password').css('background-color','pink');
-		}
-	$('#login-content').animate({opacity:'1'},200, function(){
-		if(doShake) {
-			$('#login-content').effect('shake',{distance:5,times:2},function(){
-				$('input#nickname').animate({backgroundColor:'#fff'},1000);
-				$('input#password').animate({backgroundColor:'#fff'},1000);
-				});
-			}
-		$('.front-welcome-text').show();
-		});
-	$('#page-container').animate({opacity:'1'},200);
-
-	}
 
 
 /* ·
@@ -700,9 +1176,413 @@ $('.language-link').click(function(){
    · · · · · · · · · · · · · */
 
 $('#settingslink').click(function(){
+	removeAllTooltips();
 	if(!$('.quitter-settings').hasClass('dropped')) { $('.quitter-settings').addClass('dropped'); }
 	else { $('.quitter-settings').removeClass('dropped'); }
 	});
+
+
+
+/* ·
+   ·
+   ·   Show/hide the user menu dropdown on click
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','.user-menu-cog',function(e){
+	if(!$(e.target).is($(this))) {
+		// don't show/hide when clicking inside the menu
+		}
+
+	// hide
+	else if($(this).hasClass('dropped')) {
+		$(this).removeClass('dropped');
+		$(this).children('.dropdown-menu').remove();
+		}
+
+	// show
+	else {
+
+		$(this).addClass('dropped');
+
+		var userID = $(this).attr('data-user-id');
+		var userScreenName = $(this).attr('data-screen-name');
+		var silenced = $(this).hasClass('silenced');
+		var sandboxed = $(this).hasClass('sandboxed');
+
+		// menu
+		var menuArray = [];
+
+		// settings etc if it's me
+		if(userID == window.loggedIn.id) {
+			menuArray = loggedInUsersMenuArray();
+			}
+		// block etc if it not me
+		else {
+			if(userIsBlocked(userID)) {
+				menuArray.push({
+					type: 'function',
+					functionName: 'unblockUser',
+					functionArguments: {
+						userId: userID
+						},
+					label: window.sL.unblockUser.replace('{username}','@' + userScreenName)
+					});
+				}
+			else {
+				menuArray.push({
+					type: 'function',
+					functionName: 'blockUser',
+					functionArguments: {
+						userId: userID
+						},
+					label: window.sL.blockUser.replace('{username}','@' + userScreenName)
+					});
+				}
+
+			// mute profile pref
+			menuArray.push({
+				type: 'profile-prefs-toggle',
+				namespace: 'qvitter',
+				topic: 'mute:' + userID,
+				label: window.sL.muteUser,
+				enabledLabel: window.sL.unmuteUser,
+				tickDisabled: true,
+				callback: 'hideOrShowNoticesAfterMuteOrUnmute'
+				});
+
+			// moderator actions
+			menuArray = appendModeratorUserActionsToMenuArray(menuArray,userID,userScreenName,sandboxed,silenced);
+			}
+
+		var menu = $(getMenu(menuArray)).appendTo(this);
+		alignMenuToParent(menu,$(this));
+		}
+	});
+
+// hide the stream menu when clicking outside it
+$('body').on('click',function(e){
+	if(!$(e.target).is('.user-menu-cog') && $('.user-menu-cog').hasClass('dropped') && !$(e.target).closest('.user-menu-cog').length>0) {
+		$('.user-menu-cog').children('.dropdown-menu').remove();
+		$('.user-menu-cog').removeClass('dropped');
+		}
+	});
+
+
+/* ·
+   ·
+   ·   Show/hide the stream menu dropdown on click
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','#stream-menu-cog',function(e){
+	if(!$(e.target).is('#stream-menu-cog') && $(e.target).closest('#stream-menu-cog').length>0) {
+		// don't show/hide when clicking inside the menu
+		}
+
+	// hide
+	else if($(this).hasClass('dropped')) {
+		$(this).removeClass('dropped');
+		$(this).children('.dropdown-menu').remove();
+		}
+
+	// show
+	else {
+		$(this).addClass('dropped');
+		var menu = $(streamObjectGetMenu(window.currentStreamObject)).appendTo(this);
+		alignMenuToParent(menu,$(this));
+		}
+	});
+
+// hide the stream menu when clicking outside it
+$('body').on('click',function(e){
+	if(!$(e.target).is('#stream-menu-cog') && $('#stream-menu-cog').hasClass('dropped') && !$(e.target).closest('#stream-menu-cog').length>0) {
+		$('#stream-menu-cog').children('.dropdown-menu').remove();
+		$('#stream-menu-cog').removeClass('dropped');
+		}
+	});
+
+
+
+/* ·
+   ·
+   ·   Open a queet menu when clicking ellipsis button
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','.sm-ellipsis',function(e){
+
+	if(!$(e.target).is('.sm-ellipsis') && $(e.target).closest('.sm-ellipsis').length>0) {
+		// don't show/hide when clicking inside the menu
+		}
+
+	// hide
+	else if($(this).hasClass('dropped')) {
+		$(this).removeClass('dropped');
+		$(this).children('.dropdown-menu').remove();
+		}
+
+	// show
+	else {
+		$(this).addClass('dropped');
+
+		var closestStreamItem = $(this).closest('.queet').parent('.stream-item');
+		var streamItemUsername = closestStreamItem.attr('data-user-screen-name');
+		var streamItemUserID = closestStreamItem.attr('data-user-id');
+		var streamItemID = closestStreamItem.attr('data-quitter-id');
+		var streamItemUserSandboxed = closestStreamItem.hasClass('sandboxed');
+		var streamItemUserSilenced = closestStreamItem.hasClass('silenced');
+
+		// menu
+		var menuArray = [];
+
+		// delete my notice, or others notices for mods with rights
+		if(streamItemUserID == window.loggedIn.id || window.loggedIn.rights.delete_others_notice === true) {
+			menuArray.push({
+				type: 'function',
+				functionName: 'deleteQueet',
+				functionArguments: {
+					streamItemID: streamItemID
+					},
+				label: window.sL.deleteVerb
+				});
+			}
+		// block/unblock if it's not me
+		if(streamItemUserID != window.loggedIn.id) {
+			if(userIsBlocked(streamItemUserID)) {
+				menuArray.push({
+					type: 'function',
+					functionName: 'unblockUser',
+					functionArguments: {
+						userId: streamItemUserID
+						},
+					label: window.sL.unblockUser.replace('{username}',streamItemUsername)
+					});
+				}
+			else {
+				menuArray.push({
+					type: 'function',
+					functionName: 'blockUser',
+					functionArguments: {
+						userId: streamItemUserID
+						},
+					label: window.sL.blockUser.replace('{username}',streamItemUsername)
+					});
+				}
+
+			// mute profile pref
+			menuArray.push({
+				type: 'profile-prefs-toggle',
+				namespace: 'qvitter',
+				topic: 'mute:' + streamItemUserID,
+				label: window.sL.muteUser,
+				enabledLabel: window.sL.unmuteUser,
+				tickDisabled: true,
+				callback: 'hideOrShowNoticesAfterMuteOrUnmute'
+				});
+			}
+
+		// moderator actions
+		menuArray = appendModeratorUserActionsToMenuArray(menuArray,streamItemUserID,streamItemUsername,streamItemUserSandboxed,streamItemUserSilenced);
+
+		// add menu to DOM and align it
+		var menu = $(getMenu(menuArray)).appendTo(this);
+		alignMenuToParent(menu,$(this));
+		}
+	});
+
+// remove the ellipsis menu when clicking outside it
+$('body').on('click',function(e){
+	if(!$(e.target).is('.sm-ellipsis') && $('.sm-ellipsis.dropped').length>0 && !$(e.target).closest('.sm-ellipsis').length>0) {
+		$('.sm-ellipsis').children('.dropdown-menu').remove();
+		$('.sm-ellipsis').removeClass('dropped');
+		}
+	});
+
+
+/* ·
+   ·
+   ·   When clicking a function row in a stream menu – invoke the function
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','.row-type-function',function(e){
+
+	var thisFunctionRow = $(this);
+
+	// don't invoke the function again if it's not finished last time
+	if(thisFunctionRow.hasClass('clicked')) {
+		return true;
+		}
+
+	thisFunctionRow.addClass('clicked');
+
+	var functionName = $(this).attr('data-function-name');
+	if(typeof $(this).attr('data-function-arguments') == 'undefined' || $(this).attr('data-function-arguments') == 'undefined') {
+		var functionArguments = false;
+		}
+	else {
+		var functionArguments = JSON.parse($(this).attr('data-function-arguments'));
+		}
+	window[functionName](functionArguments, function(success){
+		if(success) {
+			thisFunctionRow.removeClass('clicked');
+			}
+		});
+	});
+
+
+/* ·
+   ·
+   ·   When toggeling a a profile pref in a dropdown menu
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','.row-type-profile-prefs-toggle',function(e){
+
+	var thisToggle = $(this);
+
+	// wait for last toggle to finish before toggeling again
+	if(thisToggle.hasClass('clicked')) {
+		return true;
+		}
+
+	if(thisToggle.attr('data-profile-pref-state') == 'disabled') {
+		var prefDataToSet = '1';
+		}
+	else if(thisToggle.attr('data-profile-pref-state') == 'enabled') {
+		var prefDataToSet = '0';
+		}
+	else { // invalid
+		return true;
+		}
+
+	thisToggle.addClass('clicked');
+
+	var prefNamespace = thisToggle.attr('data-profile-prefs-namespace');
+	var prefTopic = thisToggle.attr('data-profile-prefs-topic');
+	var prefLabel = thisToggle.attr('data-profile-prefs-label');
+	var prefEnabledLabel = thisToggle.attr('data-profile-prefs-enabled-label');
+
+	// only prefs in the 'qvitter' namespace allowed
+	if(prefNamespace != 'qvitter') {
+		return true;
+		}
+
+	// save pref to server
+	postSetProfilePref(prefNamespace,prefTopic,prefDataToSet,function(data){
+		if(data === false) { // error
+			showErrorMessage(window.sL.ERRORfailedSavingYourSetting + ' (' + prefTopic + ')');
+			}
+		else { // success
+			thisToggle.removeClass('clicked');
+			if(thisToggle.attr('data-profile-pref-state') == 'disabled') {
+				thisToggle.removeClass('disabled');
+				thisToggle.addClass('enabled');
+				thisToggle.attr('data-profile-pref-state','enabled');
+				if(prefEnabledLabel != 'undefined') {
+					thisToggle.html(prefEnabledLabel);
+					}
+				window.qvitterProfilePrefs[prefTopic] = '1';
+				}
+			else if(thisToggle.attr('data-profile-pref-state') == 'enabled') {
+				thisToggle.removeClass('enabled');
+				thisToggle.addClass('disabled');
+				thisToggle.attr('data-profile-pref-state','disabled');
+				if(prefEnabledLabel != 'undefined') {
+					thisToggle.html(prefLabel);
+					}
+				window.qvitterProfilePrefs[prefTopic] = '0';
+				}
+
+			// run callback
+			if(typeof thisToggle.attr('data-profile-pref-callback') != 'undefined'
+			&& thisToggle.attr('data-profile-pref-state') != 'undefined'
+			&& typeof window[thisToggle.attr('data-profile-pref-callback')] == 'function') {
+				window[thisToggle.attr('data-profile-pref-callback')]();
+				}
+			}
+		});
+
+	});
+
+
+/* ·
+   ·
+   ·   Mark all notifications as seen
+   ·
+   · · · · · · · · · · · · · */
+
+function markAllNotificationsAsSeen(arg,callback) {
+	display_spinner();
+	getFromAPI('qvitter/mark_all_notifications_as_seen.json',function(data){
+		if(data === false) {
+			showErrorMessage(window.sL.ERRORfailedMarkingAllNotificationsAsRead);
+			callback(true);
+			}
+		else {
+			helloAPI(function(){
+				$('.stream-item').removeClass('not-seen');
+				$('#new-queets-bar').trigger('click'); // show any hidden notifications (this will also remove the dropdown menu)
+				remove_spinner();
+				callback(true);
+				});
+			}
+		});
+
+	}
+
+/* ·
+   ·
+   ·   Show or hide embedded content in timeline?
+   ·
+   · · · · · · · · · · · · · */
+
+function showOrHideEmbeddedContentInTimelineFromProfilePref() {
+	if(typeof window.qvitterProfilePrefs['hide_embedded_in_timeline:' + window.currentStreamObject.path] != 'undefined') {
+		var showHide = window.qvitterProfilePrefs['hide_embedded_in_timeline:' + window.currentStreamObject.path];
+		if(parseInt(showHide,10) == 1) {
+			$('#feed-body').addClass('embedded-content-hidden-by-user');
+			return;
+			}
+		}
+	$('#feed-body').removeClass('embedded-content-hidden-by-user');
+	}
+
+/* ·
+   ·
+   ·   Show or hide quotes in timeline?
+   ·
+   · · · · · · · · · · · · · */
+
+function showOrHideQuotesInTimelineFromProfilePref() {
+	if(typeof window.qvitterProfilePrefs['hide_quotes_in_timeline:' + window.currentStreamObject.path] != 'undefined') {
+		var showHide = window.qvitterProfilePrefs['hide_quotes_in_timeline:' + window.currentStreamObject.path];
+		if(parseInt(showHide,10) == 1) {
+			$('#feed-body').addClass('quotes-hidden-by-user');
+			return;
+			}
+		}
+	$('#feed-body').removeClass('quotes-hidden-by-user');
+	}
+
+
+/* ·
+   ·
+   ·   Show or hide notices from muted users in notifications?
+   ·
+   · · · · · · · · · · · · · */
+
+function showOrHideNoticesFromMutedUsersInNotifications() {
+	if(typeof window.qvitterProfilePrefs['hide_notifications_from_muted_users'] != 'undefined') {
+		var showHide = window.qvitterProfilePrefs['hide_notifications_from_muted_users'];
+		if(parseInt(showHide,10) == 1) {
+			$('#feed-body').addClass('hide-notifications-from-muted-users');
+			return;
+			}
+		}
+	$('#feed-body').removeClass('hide-notifications-from-muted-users')
+	}
 
 
 
@@ -738,67 +1618,73 @@ $('body').on('click','.external-member-button',function(event){
 
 /* ·
    ·
-   ·   When clicking a follow button
+   ·   When clicking a follow/block button
    ·
    · · · · · · · · · · · · · */
 
 $('body').on('click','.qvitter-follow-button',function(event){
-	if(!$(this).hasClass('disabled')) {
-		$(this).addClass('disabled');
 
-		// get user id
-		var user_id = $(this).attr('data-follow-user-id');
-
-		// if there's no local user id, we have to take a detour
-		if(typeof user_id == 'undefined') {
-			$.ajax({ url: window.siteInstanceURL + 'main/ostatussub',
-				type: "POST",
-				data: {
-					token: 	window.commonSessionToken,
-					profile: $(this).attr('data-follow-user'),
-					submit: 'Confirm'
-					},
-				error: function(data){ console.log('error'); console.log(data); },
-				success: function(data) {
-					// reload page on success
-					// since ostatussub doesn't have an api, there's no good way to get the local user id here,
-					// and change the button to an unsubscribe button.
-					window.location.replace(window.siteInstanceURL + window.loggedIn.screen_name + '/subscriptions');
-					}
-				});
-			}
-
-		// if we have a local id, it's straightforward, but we could be handling an unfollow
-		else {
-
-			// follow or unfollow?
-			if($(this).hasClass('following')) {
-				var followOrUnfollow = 'unfollow';
-				}
-			else {
-				var followOrUnfollow = 'follow';
-				}
-
-			// post to api
-			display_spinner();
-			APIFollowOrUnfollowUser(followOrUnfollow,user_id, this, function(data,this_element) {
-				remove_spinner();
-				$(this_element).removeClass('disabled');
-				if(data) {
-					if(data.following) {
-						$(this_element).addClass('following');
-						$('#user-following strong').html(parseInt($('#user-following strong').html(),10)+1);
-						appendUserToMentionsSuggestionsArray(data);
-						}
-					else {
-						$(this_element).removeClass('following');
-						$('#user-following strong').html(parseInt($('#user-following strong').html(),10)-1);
-						}
-					}
-				});
-
-			}
+	if($(this).hasClass('disabled')) {
+		return true;
 		}
+
+	$(this).addClass('disabled');
+	var user_id = $(this).attr('data-follow-user-id');
+
+	// if we have a local id, it's straightforward, but we could be handling an unfollow
+	if(typeof user_id != 'undefined') {
+
+		// unblock?
+		if($(this).hasClass('blocking')) {
+			unblockUser({userId: user_id, blockButton_jQueryElement: $(this)});
+			return true;
+			}
+
+		// follow or unfollow?
+		if($(this).hasClass('following')) {
+			var followOrUnfollow = 'unfollow';
+			}
+		else {
+			var followOrUnfollow = 'follow';
+			}
+
+		// post to api
+		display_spinner();
+		APIFollowOrUnfollowUser(followOrUnfollow,user_id, this, function(data,this_element) {
+			remove_spinner();
+			$(this_element).removeClass('disabled');
+			if(data) {
+				if(data.following) {
+					$(this_element).addClass('following');
+					$('#user-following strong').html(parseInt($('#user-following strong').html(),10)+1);
+					appendUserToMentionsSuggestionsArray(data);
+					}
+				else {
+					$(this_element).removeClass('following');
+					$('#user-following strong').html(parseInt($('#user-following strong').html(),10)-1);
+					}
+				}
+			});
+
+		return true;
+		}
+
+	// if there's no local user id, we have to take a detour
+	$.ajax({ url: window.siteInstanceURL + 'main/ostatussub',
+		type: "POST",
+		data: {
+			token: 	window.commonSessionToken,
+			profile: $(this).attr('data-follow-user'),
+			submit: 'Confirm'
+			},
+		error: function(data){ console.log('error'); console.log(data); },
+		success: function(data) {
+			// reload page on success
+			// since ostatussub doesn't have an api, there's no good way to get the local user id here,
+			// and change the button to an unsubscribe button.
+			window.location.replace(window.siteInstanceURL + window.loggedIn.screen_name + '/subscriptions');
+			}
+		});
 	});
 
 
@@ -835,11 +1721,29 @@ $('body').on('click','.member-button',function(event){
 					$(this_element).addClass('member');
 					$('.profile-card .member-stats strong').html(parseInt($('.profile-card .member-stats strong').html(),10)+1);
 					$('#user-groups strong').html(parseInt($('#user-groups strong').html(),10)+1);
+					// add group to mention suggestion array
+					if(data.homepage_logo === null) {
+						data.homepage_logo = window.defaultAvatarStreamSize;
+						}
+					var groupmembershipObject = { avatar:data.homepage_logo, id:data.id, name:data.fullname, url:data.url, username:data.nickname };
+					window.groupMemberships.push(groupmembershipObject);
 					}
 				else if(data.member === false) {
 					$(this_element).removeClass('member');
 					$('.profile-card .member-stats strong').html(parseInt($('.profile-card .member-stats strong').html(),10)-1);
 					$('#user-groups strong').html(parseInt($('#user-groups strong').html(),10)-1);
+
+					// remove group from mention suggestion array, if it's there
+					var groupToRemove = false;
+					$.each(window.groupMemberships,function(k,v) {
+						if(v.id == data.id) {
+							groupToRemove = k;
+							}
+						});
+					if(groupToRemove) {
+						console.log('remove at' + groupToRemove);
+						window.groupMemberships.splice(groupToRemove,1);
+						}
 					}
 				}
 			});
@@ -849,75 +1753,18 @@ $('body').on('click','.member-button',function(event){
 
 /* ·
    ·
-   ·   Select a stream when the logged in user clicks their own queets, followers etc
+   ·   Go to profile page when clicking the small user header in left column
    ·
    · · · · · · · · · · · · · */
 
-$('#user-header, #user-queets, #user-following, #user-followers, #user-groups').on('click',function(e){
-
-	// not if we're clicking the mini-edit-profile-button
-	if($(e.target).is('#mini-edit-profile-button')) {
+$('#user-header').on('click',function(e){
+	// not if we're clicking the mini-logged-in-user-cog-wheel
+	if($(e.target).is('#mini-logged-in-user-cog-wheel')) {
 		return;
 		}
-
-	if($(this).attr('id') == 'user-header' || $(this).attr('id') == 'user-queets') {
-		setNewCurrentStream('statuses/user_timeline.json?screen_name=' + window.loggedIn.screen_name,function(){},true);
-		}
-	else if($(this).attr('id') == 'user-following') {
-		setNewCurrentStream('statuses/friends.json?count=20',function(){},true);
-		}
-	else if($(this).attr('id') == 'user-followers') {
-		setNewCurrentStream('statuses/followers.json?count=20',function(){},true);
-		}
-	else if($(this).attr('id') == 'user-groups') {
-		setNewCurrentStream('statusnet/groups/list.json?count=10',function(){},true);
-		}
+	setNewCurrentStream(pathToStreamRouter(window.loggedIn.screen_name),true,false);
 	});
 
-
-/* ·
-   ·
-   ·   Select a stream when clicking on queets, followers etc in a profile card or feed header
-   ·
-   · · · · · · · · · · · · · */
-
-$('body').on('click','.profile-banner-footer .stats li a, .queet-stream',function(){
-	var screenName = $('.profile-card-inner .screen-name').html().substring(1);
-	if($(this).hasClass('tweet-stats')) {
-		setNewCurrentStream('statuses/user_timeline.json?screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('following-stats')) {
-		setNewCurrentStream('statuses/friends.json?count=20&screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('follower-stats')) {
-		setNewCurrentStream('statuses/followers.json?count=20&screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('groups-stats')) {
-		setNewCurrentStream('statusnet/groups/list.json?count=10&screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('queets')) {
-		setNewCurrentStream('statuses/user_timeline.json?screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('mentions')) {
-		setNewCurrentStream('statuses/mentions.json?screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('favorites')) {
-		setNewCurrentStream('favorites.json?screen_name=' + screenName,function(){},true);
-		}
-	else if($(this).hasClass('following')) {
-		setNewCurrentStream('statuses/friends.json?count=20',function(){},true);
-		}
-	else if($(this).hasClass('followers')) {
-		setNewCurrentStream('statuses/followers.json?count=20',function(){},true);
-		}
-	else if($(this).hasClass('member-stats')) {
-		setNewCurrentStream('statusnet/groups/membership/' + screenName + '.json?count=20',function(){},true);
-		}
-	else if($(this).hasClass('admin-stats')) {
-		setNewCurrentStream('statusnet/groups/admins/' + screenName + '.json?count=20',function(){},true);
-		}
-
-	});
 
 
 /* ·
@@ -929,8 +1776,8 @@ $('body').on('click','.profile-banner-footer .stats li a, .queet-stream',functio
 $('#search-query').on('keyup',function(e) { if(e.keyCode==13) { showSearchStream(); }}); // on enter in input field
 $('button.icon.nav-search').on('click',function(e) { showSearchStream();});	// on click on magnifying glass
 function showSearchStream() {
-	streamName = 'search.json?q=' + encodeURIComponent(replaceHtmlSpecialChars($('#search-query').val()));
-	setNewCurrentStream(streamName,function(){},true);
+	var path = 'search/notice?q=' + encodeURIComponent(replaceHtmlSpecialChars($('#search-query').val()));
+	setNewCurrentStream(pathToStreamRouter(path),true,false);
 	}
 
 
@@ -950,17 +1797,12 @@ $('body').on('click','a', function(e) {
 		return;
 		}
 
-	// don't hijack if this is an external link that has been clicked but failed that time
-	if($(this).hasClass('external-profile-clicked')) {
-		return;
-		}
-
 	// don't hijack if this is an anchor link in the faq
 	if($(this).closest('.modal-container').attr('id') == 'popup-faq' && $(this).attr('href').indexOf('#') > -1) {
 		return;
 		}
 
-	// don't hijack and don't follow link if this is the x remove users from history, prevent link but don't set a new currentstream
+	// don't hijack and don't follow link if this is the bookmark stream icon, prevent link but don't set a new currentstream
 	if($(e.target).is('i.chev-right')) {
 		e.preventDefault();
 		return;
@@ -971,314 +1813,151 @@ $('body').on('click','a', function(e) {
 		return;
 		}
 
-	// if we're clicking something in a profile card popup, close it!
-	if($(this).closest('#popup-local-profile, #popup-external-profile').length>0) {
-		$('.modal-container').remove();
-		}
-
 	// all links opens in new tab
 	$(this).attr('target','_blank');
 
-	if(typeof $(this).attr('href') != 'undefined') {
-
-		// site root
-		if($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain,'') == '/') {
-			e.preventDefault();
-			setNewCurrentStream('statuses/public_timeline.json',function(){},true);
-			}
-		// whole network feed
-		else if($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain,'') == '/main/all') {
-			e.preventDefault();
-			setNewCurrentStream('statuses/public_and_external_timeline.json',function(){},true);
-			}
-		// logged in users streams
-		else if ($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/' + window.loggedIn.screen_name,'') == '/all') {
-			e.preventDefault();
-			setNewCurrentStream('statuses/friends_timeline.json',function(){},true);
-			}
-		else if ($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/' + window.loggedIn.screen_name,'') == '/replies') {
-			e.preventDefault();
-			setNewCurrentStream('statuses/mentions.json',function(){},true);
-			}
-		else if ($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/' + window.loggedIn.screen_name,'') == '/notifications') {
-			e.preventDefault();
-			setNewCurrentStream('qvitter/statuses/notifications.json',function(){},true);
-			}
-		else if ($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/' + window.loggedIn.screen_name,'') == '/favorites') {
-			e.preventDefault();
-			setNewCurrentStream('favorites.json',function(){},true);
-			}
-		// profiles
-		else if ((/^[a-zA-Z0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/','')))
-		|| (/^[0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/user/','')))) {
-
-			if($(this).attr('href').indexOf('/user/') > -1) {
-				var linkNickname = $(this).text().toLowerCase();
-				if(linkNickname.substring(0,1) == '@') {
-					linkNickname = linkNickname.substring(1);
-					}
-				}
-			else {
-				var linkNickname = $(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/','');
-				}
-
-			// don't hijack /groups-url
-			if(linkNickname == 'groups') {
-				return;
-				}
-
-			e.preventDefault();
-
-			// logged in user
-			if($(this).parent().attr('id') == 'user-profile-link'
-			|| linkNickname == window.loggedIn.screen_name) {
-				setNewCurrentStream('statuses/user_timeline.json?screen_name=' + window.loggedIn.screen_name,function(){},true);
-				}
-			// when in local profile popups
-			else if($(this).closest('#popup-local-profile').length>0) {
-				setNewCurrentStream('statuses/user_timeline.json?screen_name=' + linkNickname,function(){},true);
-				}
-			// any local user, not in popups –> open popup
-			else {
-
-				$(this).addClass('local-profile-clicked');
-
-				popUpAction('popup-local-profile', '','<div id="popup-local-profile-spinner" style="height:300px;"></div>',false);
-				display_spinner('#popup-local-profile-spinner');
-
-				var cachedUserArray = userArrayCacheGetByProfileUrlAndNickname($(this).attr('href'), linkNickname);
-
-				if(cachedUserArray && cachedUserArray.local) {
-					openLocalProfileInPopup(cachedUserArray.local);
-					remove_spinner();
-					$('.local-profile-clicked').removeClass('local-profile-clicked');
-					}
-
-				// but always query the server also
-				getFromAPI('users/show.json?id=' + linkNickname,function(data){
-					if(data) {
-						// update the popup if it's still open
-						if($('#popup-local-profile').length>0) {
-							openLocalProfileInPopup(data);
-							remove_spinner();
-							$('.local-profile-clicked').removeClass('local-profile-clicked');
-							}
-						}
-					});
-				}
-			}
-		// tags
-		else if ($(this).attr('href').indexOf(window.siteRootDomain + '/tag/')>-1) {
-			e.preventDefault();
-			setNewCurrentStream('statusnet/tags/timeline/' + $(this).text().toLowerCase().replace('#','') + '.json',function(){},true);
-			}
-		// notices
-		else if ($(this).attr('href').indexOf(window.siteRootDomain + '/notice/')>-1 && $(this).attr('href').indexOf(window.siteRootDomain + '/notice/delete/')==-1) {
-			e.preventDefault();
-			setNewCurrentStream('statuses/show/' + $(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/notice/','') + '.json',function(){},true);
-			}
-		// groups
-		else if (/^[0-9]+$/.test($(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/group/','').replace('/id',''))) {
-			e.preventDefault();
-			if($(this).hasClass('account-group')) {
-				var groupName = $(this).find('.screen-name').html().substring(1);
-				}
-			else {
-				var groupName = $(this).text().toLowerCase();
-				if(groupName.substring(0,1) == '!') {
-					groupName = groupName.substring(1);
-					}
-				}
-			setNewCurrentStream('statusnet/groups/timeline/' + groupName + '.json',function(){},true);
-			}
-		else if ($(this).attr('href').indexOf(window.siteRootDomain + '/group/')>-1) {
-			e.preventDefault();
-			setNewCurrentStream('statusnet/groups/timeline/' + $(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain + '/group/','') + '.json',function(){},true);
-			}
-		// search
-		else if ($(this).attr('href').indexOf('/search/notice?q=')>-1) {
-			e.preventDefault();
-			var searchToStream = $(this).attr('href').replace('http://','').replace('https://','').replace(window.siteRootDomain,'').replace('/search/notice?q=','');
-			setNewCurrentStream('search.json?q=' + searchToStream,function(){},true);
-			}
-
-		// profile picture
-		else if ($(this).hasClass('profile-picture')) {
-			e.preventDefault();
-				if($(this).closest('.modal-container').attr('id') != 'edit-profile-popup') { // no popup if we're editing our profile
-					popUpAction('popup-profile-picture', $('.profile-card-inner .screen-name').html(),'<img style="width:100%;display:block;" src="' + $(this).attr('href') + '" />',false);
-					}
-			}
-
-		// external profiles
-		else if (($(this).children('span.mention').length>0 // if it's a mention
-				 || $(this).hasClass('h-card mention') // if it's a newer gnusocial group mention
-				 || ($(this).hasClass('account-group') && $(this).attr('href').indexOf('/group/')==-1) // or if this is queet stream item header but not a group
-		         || ($(this).closest('.stream-item').hasClass('activity') && $(this).attr('href').indexOf('/group/')==-1)) // or if it's a activity notice but not a group link
-		         && typeof window.loggedIn.screen_name != 'undefined') { // if logged in
-			e.preventDefault();
-			$(this).addClass('external-profile-clicked');
-
-			popUpAction('popup-external-profile', '','<div id="popup-external-profile-spinner" style="height:300px;"></div>',false);
-			display_spinner('#popup-external-profile-spinner');
-
-			// try getting from cache, to display immediately
-			if($(this).hasClass('account-group')) {
-				var externalNickname = $(this).children('.screen-name').text();
-				}
-			else {
-				var externalNickname = $(this).text();
-				}
-			if(externalNickname.substring(0,1) == '@') {
-				externalNickname = externalNickname.substring(1);
-				}
-			var cachedUserArray = userArrayCacheGetByProfileUrlAndNickname($(this).attr('href'), externalNickname);
-
-			if(cachedUserArray && cachedUserArray.external) {
-				openExternalProfileInPopup(cachedUserArray);
-				remove_spinner();
-				$('.external-profile-clicked').removeClass('external-profile-clicked');
-				}
-
-			// but always query the server also
-			getFromAPI('qvitter/external_user_show.json?profileurl=' + encodeURIComponent($(this).attr('href')),function(data){
-
-				if(data && data.external !== null) {
-
-					// update the popup if it's still open
-					if($('#popup-external-profile').length>0) {
-						openExternalProfileInPopup(data);
-						remove_spinner();
-						}
-
-					$('.external-profile-clicked').removeClass('external-profile-clicked');
-					}
-				// if external lookup failed, and we don't have a cached profile card, trigger click again.
-				// it will not be hijacked since we don't remove the external-profile-clicked class here
-				else if($('#popup-external-profile-spinner').length > 0){
-					$('.modal-container').remove();
-					$('.external-profile-clicked')[0].click();
-					$('.external-profile-clicked').removeClass('external-profile-clicked');
-					}
-
-				});
-			}
-
-		// external groups
-		else if (($(this).children('span.group').length>0 // if it's a group mention
-				 || $(this).hasClass('h-card group') // if it's a newer gnusocial group mention
-				 || ($(this).hasClass('account-group') && $(this).attr('href').indexOf('/group/')>-1) // or if this is group stream item header
-		         || ($(this).closest('.stream-item').hasClass('activity') && $(this).attr('href').indexOf('/group/')>-1)) // or if it's a activity notice
-		         && typeof window.loggedIn.screen_name != 'undefined') { // if logged in
-			e.preventDefault();
-			display_spinner();
-			getFromAPI('statusnet/groups/show.json?id=foo&uri=' + encodeURIComponent($(this).attr('href')), function(data){ if(data){
-
-				data.nickname = data.nickname || '';
-				data.fullname = data.fullname || '';
-				data.stream_logo = data.stream_logo || 'http://quitter.se/theme/quitter-theme2/default-avatar-stream.png';
-				data.homepage_logo = data.homepage_logo || 'http://quitter.se/theme/quitter-theme2/default-avatar-profile.png';
-				data.original_logo = data.original_logo || 'http://quitter.se/theme/quitter-theme2/default-avatar-profile.png';
-				data.description = data.description || '';
-				data.homepage = data.homepage || '';
-				data.url = data.url || '';
-				data.member_count = data.member_count || 0;
-				data.admin_count = data.admin_count || 0;
-
-				// show user actions if logged in
-				var memberClass = '';
-				if(data.member) {
-					memberClass = 'member';
-					}
-
-				var groupRoot = data.url.substring(0,data.url.indexOf('/group/'));
-				var groupServer = groupRoot.replace('http://','').replace('https://','');
-
-				var memberButton = '<div class="user-actions"><button data-group-id="' + data.id + '" type="button" class="member-button ' + memberClass + '"><span class="button-text join-text"><i class="join"></i>' + window.sL.joinGroup + '</span><span class="button-text ismember-text">' + window.sL.isMemberOfGroup + '</span><span class="button-text leave-text">' + window.sL.leaveGroup + '</span></button></div>';
-
-				// get local member avatars
-				getFromAPI('statusnet/groups/membership.json?id=' + data.id, function(user_data){ if(user_data){
-					var avatars = '';
-					var i=0;
-					$.each(user_data,function(k,v){
-						if(i<7) {
-							avatars = avatars + '<img class="avatar size30" src="' + v.profile_image_url + '" />';
-							}
-						i++;
-						});
-					var profileCard = '<div class="profile-card"><div class="profile-header-inner" style="background-image:url(' + data.original_logo + ')"><div class="profile-header-inner-overlay"></div><a class="profile-picture"><img src="' + data.homepage_logo + '" /></a><div class="profile-card-inner"><h1 class="fullname">' + data.fullname + '<span></span></h1><h2 class="username"><span class="screen-name"><a target="_blank" href="' + groupRoot + '/group/' + data.nickname + '">!' + data.nickname + '@' + groupServer + '</a></span></span></h2><div class="bio-container"><p>' + data.description + '</p></div><p class="location-and-url"></span><span class="url"><a href="' + data.homepage + '">' + data.homepage.replace('http://','').replace('https://','') + '</a></span></p></div></div><div class="profile-banner-footer"><ul class="stats"><li><a target="_blank" href="' + groupRoot + '/group/' + data.nickname + '/members" class="member-stats">' + avatars + '</a></li></ul>' + memberButton + '<div class="clearfix"></div></div></div>';
-					popUpAction('popup-external-group-profile', '!' + data.nickname + '@' + groupServer,profileCard,false);
-					remove_spinner();
-					}});
-				}});
-			}
+	// only proceed if we really have a href attribute
+	if(typeof $(this).attr('href') == 'undefined') {
+		return;
 		}
-	});
 
-
-/* ·
-   ·
-   ·   Open a queet menu when clicking ellipsis button
-   ·
-   · · · · · · · · · · · · · */
-
-$('body').on('click','.sm-ellipsis',function(){
-	// hide
-	if($(this).closest('.action-ellipsis-container').children('.dropdown-menu').length > 0) {
-		$(this).closest('.action-ellipsis-container').children('.dropdown-menu').remove();
+	// profile picture
+	if ($(this).hasClass('profile-picture')) {
+		e.preventDefault();
+			if($(this).closest('.modal-container').attr('id') != 'edit-profile-popup') { // no popup if we're editing our profile
+				popUpAction('popup-profile-picture', $('.profile-card-inner .screen-name').html(),'<img style="width:100%;display:block;" src="' + $(this).attr('href') + '" />',false);
+				$('.hover-card,.hover-card-caret').remove();
+				}
 		}
-	// show
+	// hijack link if we find a matching link that qvitter can handle
 	else {
-		$('.action-ellipsis-container').children('.dropdown-menu').remove(); // remove menu from other queets
-		var streamItemUsername = $(this).closest('.queet').find('.stream-item-header').find('.screen-name').text();
-		var streamItemUserID = $(this).closest('.queet').find('.stream-item-header').find('.name').attr('data-user-id');
-		var streamItemID = $(this).closest('.queet').parent('.stream-item').attr('data-quitter-id');
+		var streamObject = URLtoStreamRouter($(this).attr('href'));
+		if(streamObject && streamObject.stream) {
+			e.preventDefault();
 
-		var blockHtml = '';
-		var deleteHtml = '';
-		if(streamItemUserID != window.loggedIn.id) {
-			blockHtml = '<li><a class="block-user" href="' + window.siteInstanceURL + 'main/block?profileid=' + streamItemUserID + '">' + window.sL.blockUser.replace('{username}',streamItemUsername) + '</a></li>';
+			// if this is a user/{id} type link we want to find the nickname before setting a new stream
+			// the main reason is that we want to update the browsers location bar and the .stream-selecton
+			// links as fast as we can. we rather not wait for the server response
+			if(streamObject.name == 'profile by id') {
+
+				// pathToStreamRouter() might have found a cached nickname
+				if(streamObject.nickname) {
+					setNewCurrentStream(pathToStreamRouter(streamObject.nickname),true,streamObject.id);
+					}
+				// otherwise we might follow the user and thereby already know its nickname
+				else if (typeof window.following != 'undefined' && typeof window.following[streamObject.id] != 'undefined') {
+					setNewCurrentStream(pathToStreamRouter(window.following[streamObject.id].username),true,streamObject.id);
+					}
+				// if the text() of the clicked element looks like a user nickname, use that (but send id to setNewCurrentStream() in case this is bad data)
+				else if(/^@[a-zA-Z0-9]+$/.test($(e.target).text()) || /^[a-zA-Z0-9]+$/.test($(e.target).text())) {
+					var nickname = $(e.target).text();
+					if(nickname.indexOf('@') == 0) {
+						nickname = nickname.substring(1); // remove any starting @
+						}
+					setNewCurrentStream(pathToStreamRouter(nickname),true,streamObject.id);
+					}
+				// if we can't figure out or guess a nickname, query the server for it
+				else {
+					getNicknameByUserIdFromAPI(streamObject.id,function(nickname) {
+						if(nickname) {
+							setNewCurrentStream(pathToStreamRouter(nickname),true,false);
+							}
+						else {
+							alert('user not found');
+							}
+						});
+					}
+				}
+			// same with group/{id}/id links
+			else if(streamObject.name == 'group notice stream by id') {
+				// we might be member of the group and thereby already know its nickname
+				if (typeof window.groupMemberships != 'undefined' && typeof window.groupMemberships[streamObject.id] != 'undefined') {
+					setNewCurrentStream(pathToStreamRouter('group/' + window.groupMemberships[streamObject.id].username),true,streamObject.id);
+					}
+				// if the text() of the clicked element looks like a group nickname, use that (but send id to setNewCurrentStream() in case this is bad data)
+				else if(/^![a-zA-Z0-9]+$/.test($(e.target).text()) || /^[a-zA-Z0-9]+$/.test($(e.target).text())) {
+					var nickname = $(e.target).text();
+					if(nickname.indexOf('!') == 0) {
+						nickname = nickname.substring(1); // remove any starting !
+						}
+					setNewCurrentStream(pathToStreamRouter('group/' + nickname),true,streamObject.id);
+					}
+				// if we can't figure out or guess a nickname, query the server for it
+				else {
+					getNicknameByGroupIdFromAPI(streamObject.id,function(nickname) {
+						if(nickname) {
+							setNewCurrentStream(pathToStreamRouter('group/' + nickname),true,false);
+							}
+						else {
+							alert('group not found');
+							}
+						});
+					}
+				}
+			// all other links that qvitter can handle
+			else {
+				setNewCurrentStream(streamObject,true,false);
+				}
 			}
-		else {
-			deleteHtml = '<li><a class="delete-queet" href="' + window.siteInstanceURL + 'notice/delete/' + streamItemID + '">' + window.sL.deleteVerb + '</a></li>';
-			}
-
-
-		$(this).closest('.action-ellipsis-container').append('\
-			<ul class="dropdown-menu">\
-				<li class="dropdown-caret left"><span class="caret-outer"></span><span class="caret-inner"></span></li>\
-				' + blockHtml + '\
-				' + deleteHtml + '\
-			</ul>\
-			');
 		}
 	});
 
 
 
-
-
 /* ·
    ·
-   ·   When user clicks the x to remove a menu history item
+   ·   When user clicks the bookmark icon to bookmark
    ·
    · · · · · · · · · · · · · */
 
 $('body').on('click','#history-container .chev-right',function(event){
-	$(this).parent('.stream-selection').remove();
-	updateHistoryLocalStorage();
+	var thisStreamLink = $(this).parent('.stream-selection');
+	thisStreamLink.slideUp(300,function(){
+		$('#bookmark-container').append(thisStreamLink.outerHTML());
+		$('#bookmark-container').children().last().children('.chev-right').attr('data-tooltip',window.sL.tooltipRemoveBookmark);
+		$('#bookmark-container').children().last().fadeIn(300,function(){
+			thisStreamLink.remove();
+			updateHistoryLocalStorage();
+			saveAllBookmarks();
+			});
+		});
 	});
 
 
 /* ·
    ·
-   ·   When sorting the history menu
+   ·   When user clicks the x to remove a bookmark
    ·
    · · · · · · · · · · · · · */
 
-$('#history-container').on("sortupdate", function() {
+$('body').on('click','#bookmark-container .chev-right',function(event){
+	$(this).parent('.stream-selection').remove();
+	saveAllBookmarks();
+	});
+
+
+/* ·
+   ·
+   ·   When sorting the bookmark menu
+   ·
+   · · · · · · · · · · · · · */
+
+$('#bookmark-container').on("sortupdate", function() {
+	saveAllBookmarks();
+	});
+
+
+/* ·
+   ·
+   ·   When clearing the browsing history
+   ·
+   · · · · · · · · · · · · · */
+
+$('#clear-history').on('click', function() {
+	$('#history-container').empty();
 	updateHistoryLocalStorage();
 	});
+
 
 
 
@@ -1294,23 +1973,19 @@ $(window).scroll(function() {
 	if($(window).scrollTop() + $(window).height() > $(document).height() - 1000) {
 
 		// not if we're already loading or if no stream is set yet
-		if(!$('body').hasClass('loading-older') && typeof window.currentStream != "undefined") {
+		if(!$('body').hasClass('loading-older') && typeof window.currentStreamObject != "undefined" && $('#feed-body').attr('data-end-reached') != 'true') {
 			$('body').addClass('loading-older');
 
 			// remove loading class in 10 seconds, i.e. try again if failed to load within 10 s
-			if(window.currentStream.substring(0,6) != 'search') {
+			if(window.currentStreamObject.name != 'search') {
 				setTimeout(function(){$('body').removeClass('loading-older');},10000);
 				}
 
 			var lastStreamItemId = $('#feed-body').children('.stream-item').last().attr('id');
 
-			// if this is search or users lists, we need page and rpp vars, we store page number in an attribute
-			if(window.currentStream.substring(0,6) == 'search'
-			|| window.currentStream.substring(0,23) == 'statuses/followers.json'
-			|| window.currentStream.substring(0,21) == 'statuses/friends.json'
-			|| window.currentStream.substring(0,26) == 'statusnet/groups/list.json'
-			|| window.currentStream.substring(0,28) == 'statusnet/groups/membership/'
-			|| window.currentStream.substring(0,24) == 'statusnet/groups/admins/') {
+			// if this is a stream that uses 'page' for paging, i.e. search or users lists,
+			// we need page and rpp vars (page number is stored in an attribute in feed-body)
+			if(window.currentStreamObject.maxIdOrPage == 'page') {
 				if(typeof $('#feed-body').attr('data-search-page-number') != 'undefined') {
 					var searchPage = parseInt($('#feed-body').attr('data-search-page-number'),10);
 					}
@@ -1318,31 +1993,32 @@ $(window).scroll(function() {
 					var searchPage=2;
 					}
 				var nextPage = searchPage+1;
-				var getVars = qOrAmp(window.currentStream) + 'rpp=20&page=' + searchPage; // search uses 'rrp' var and others 'count' for paging, though we can add rrp to others aswell without any problem
+				var getVars = qOrAmp(window.currentStreamObject.stream) + 'rpp=20&page=' + searchPage; // search uses 'rpp' var and others 'count' for paging, though we can add rrp to others aswell without any problem
 				}
 			// normal streams
 			else {
-				var getVars = qOrAmp(window.currentStream) + 'max_id=' + ($('#feed-body').children('.stream-item').last().attr('data-quitter-id-in-stream'));
+				var getVars = qOrAmp(window.currentStreamObject.stream) + 'max_id=' + ($('#feed-body').children('.stream-item').last().attr('data-quitter-id-in-stream'));
 				}
 
 			display_spinner('#footer-spinner-container');
-			getFromAPI(window.currentStream + getVars,function(data){
-				if(data) {
+			getFromAPI(window.currentStreamObject.stream + getVars,function(data){
+
+				// if data returned an empty array, we have probably reached the bottom
+				if(data.length == 0) {
+					$('#feed-body').attr('data-end-reached',true);
+					}
+
+				else if(data) {
 					addToFeed(data, lastStreamItemId,'visible');
 					$('body').removeClass('loading-older');
 
-					// if this is search our group users lists, we remember page number
-					if(window.currentStream.substring(0,6) == 'search'
-					|| window.currentStream.substring(0,23) == 'statuses/followers.json'
-					|| window.currentStream.substring(0,21) == 'statuses/friends.json'
-					|| window.currentStream.substring(0,26) == 'statusnet/groups/list.json'
-					|| window.currentStream.substring(0,28) == 'statusnet/groups/membership/'
-					|| window.currentStream.substring(0,24) == 'statusnet/groups/admins/') {
+					// if this is search our group users lists, we remember page number (if we got any users)
+					if(window.currentStreamObject.maxIdOrPage == 'page') {
 						$('#feed-body').attr('data-search-page-number',nextPage);
 						}
-
-					remove_spinner();
 					}
+
+				remove_spinner();
 				});
 			}
    	   	}
@@ -1357,9 +2033,7 @@ $(window).scroll(function() {
    · · · · · · · · · · · · · */
 
 var updateTimesInterval=self.setInterval(function(){
-	$('.created-at').each(function(){
-		$(this).children('a').html(parseTwitterDate($(this).attr('data-created-at')));
-		});
+	updateAllQueetsTimes();
 	},10000);
 
 
@@ -1376,41 +2050,29 @@ function checkForNewQueets() {
 	if(!$('body').hasClass('loading-newer')) {
 		$('body').addClass('loading-newer');
 
-		// only of logged in and not user stream
-		if($('#user-container').css('display') == 'block' && $('.stream-item.user').length==0) {
-			var lastId = $('#feed-body').children('.stream-item').not('.temp-post').attr('data-quitter-id-in-stream');
-			var addThisStream = window.currentStream;
+		// only if logged in and only for notice or notification streams
+		if(window.loggedIn && (window.currentStreamObject.type == 'notices' || window.currentStreamObject.type == 'notifications')) {
+			var lastId = $('#feed-body').children('.stream-item').not('.temp-post').not('.posted-from-form').attr('data-quitter-id-in-stream');
+			var addThisStream = window.currentStreamObject.stream;
 			var timeNow = new Date().getTime();
-			getFromAPI(addThisStream + qOrAmp(window.currentStream) + 'since_id=' + lastId,function(data){
+			getFromAPI(addThisStream + qOrAmp(window.currentStreamObject.stream) + 'since_id=' + lastId,function(data){
 				if(data) {
 					$('body').removeClass('loading-newer');
-					if(addThisStream == window.currentStream) {
+					if(addThisStream == window.currentStreamObject.stream) {
 						addToFeed(data, false, 'hidden');
+
+						// say hello to the api if this is notifications stream, to
+						// get correct unread notifcation count
+						if(window.currentStreamObject.name == 'notifications') {
+							helloAPI();
+							}
+
+						// if we have hidden items, show new-queets-bar
+						maybeShowTheNewQueetsBar()
+
 						}
 					}
 				});
-			}
-
-		// if we have hidden items, show new-queets-bar
-		if($('#feed-body').find('.stream-item.hidden').length > 0) {
-			var new_queets_num = $('#feed-body').find('.stream-item.hidden').length;
-
-			// if this is notifications page, update site title with hidden notification count
-			if(window.currentStream == 'qvitter/statuses/notifications.json') {
-				document.title = window.siteTitle + ' (' + new_queets_num + ')';
-				}
-
-			$('#new-queets-bar').parent().removeClass('hidden');
-
-			// text plural
-			if(new_queets_num == 1) {
-				var q_txt = ' ' + window.sL.newQueet;
-				}
-			else {
-				var q_txt = ' ' + window.sL.newQueets;
-				}
-
-			$('#new-queets-bar').html(new_queets_num + q_txt);
 			}
 		}
 	}
@@ -1423,7 +2085,7 @@ function checkForNewQueets() {
    · · · · · · · · · · · · · */
 
 $('body').on('click','#new-queets-bar',function(){
-	if(window.currentStream == 'qvitter/statuses/notifications.json') {
+	if(window.currentStreamObject.name == 'notifications') {
 		document.title = window.siteTitle;
 		}
 	var hiddenStreamItems = $('.stream-item.hidden');
@@ -1432,6 +2094,12 @@ $('body').on('click','#new-queets-bar',function(){
 	hiddenStreamItems.addClass('visible');
 	hiddenStreamItems.removeClass('hidden');
 	$('#new-queets-bar').parent().addClass('hidden');
+
+	// say hello to the api if this is notifications stream, to
+	// get correct unread notifcation count
+	if(window.currentStreamObject.name == 'notifications') {
+		helloAPI();
+		}
 	});
 
 
@@ -1444,33 +2112,37 @@ $('body').on('click','#new-queets-bar',function(){
    · · · · · · · · · · · · · */
 
 $('body').on('click','.queet',function (event) {
-	if(!$(event.target).is('a')
-		&& !$(event.target).is('video')
-		&& !$(event.target).is('.cm-mention')
-		&& !$(event.target).is('.cm-tag')
-		&& !$(event.target).is('.cm-group')
-		&& !$(event.target).is('.cm-url')
-		&& !$(event.target).is('pre')
-		&& !$(event.target).is('img')
-		&& !$(event.target).is('.name')
-		&& !$(event.target).is('.queet-box')
-		&& !$(event.target).is('.syntax-two')
-		&& !$(event.target).is('button')
-		&& !$(event.target).is('.show-full-conversation')
-		&& !$(event.target).is('span.mention')
-		&& !$(event.target).is('.action-reply-container a span')
-		&& !$(event.target).is('.action-reply-container a b')
-		&& !$(event.target).is('.action-rt-container a span')
-		&& !$(event.target).is('.action-rt-container a b')
-		&& !$(event.target).is('.action-del-container a span')
-		&& !$(event.target).is('.action-del-container a b')
-		&& !$(event.target).is('.action-fav-container a span')
-		&& !$(event.target).is('.action-fav-container a b')
-		&& !$(event.target).is('.action-ellipsis-container a span')
-		&& !$(event.target).is('.action-ellipsis-container a b')
-		&& !$(event.target).is('span.group')
-		&& !$(event.target).is('.longdate')
-		&& !$(event.target).is('.screen-name')
+	if(typeof $(this).attr('href') == 'undefined'
+	&& $(event.target).closest('a').length == 0
+	&& !$(event.target).is('\
+			a,\
+			video,\
+			.cm-mention,\
+			.cm-tag,\
+			.cm-group,\
+			.cm-url,\
+			pre,\
+			img,\
+			.name,\
+			.queet-box,\
+			.syntax-two,\
+			button,\
+			.show-full-conversation,\
+			span.mention,\
+			.action-reply-container a span,\
+			.action-reply-container a b,\
+			.action-rt-container a span,\
+			.action-rt-container a b,\
+			.action-del-container a span,\
+			.action-del-container a b,\
+			.action-fav-container a span,\
+			.action-fav-container a b,\
+			.action-ellipsis-container a span,\
+			.action-ellipsis-container a b,\
+			span.group,\
+			.longdate,\
+			.screen-name,\
+			.discard-error-message')
 		&& !$(this).parent('.stream-item').hasClass('user')) { // not if user stream
 		expand_queet($(this).parent());
 		}
@@ -1499,35 +2171,28 @@ $('body').on('click','.stream-item .queet img.attachment-thumb',function (event)
 		var thisAttachmentThumbSrc = $(this).attr('src');
 		var parentStreamItem = $(this).closest('.stream-item');
 		var $parentStreamItemClone = $('<div/>').append(parentStreamItem.outerHTML());
+		var $queetThumbsClone = $('<div/>').append($parentStreamItemClone.children('.stream-item').children('.queet').find('.queet-thumbs').outerHTML());
 
-		if(!parentStreamItem.hasClass('conversation')) {
-			$parentStreamItemClone.find('.stream-item.conversation').remove();
-			}
+		// cleaned version of the stream item to show in the footer
+		cleanStreamItemsFromClassesAndConversationElements($parentStreamItemClone);
+		$parentStreamItemClone.find('.context,.stream-item-footer').remove();
+		var parentStreamItemHTMLWithoutFooter = $parentStreamItemClone.outerHTML();
 
-		var $queetThumbsClone = $('<div/>').append($parentStreamItemClone.find('.queet-thumbs').outerHTML());
-
-		$parentStreamItemClone.find('.queet-thumbs, .expanded-content, .inline-reply-queetbox, .stream-item-footer').remove();
-		var footerHTML = $parentStreamItemClone.find('.queet').outerHTML();
 		$thumbToDisplay = $queetThumbsClone.find('img.attachment-thumb[src="' + thisAttachmentThumbSrc + '"]');
 		$thumbToDisplay.parent().addClass('display-this-thumb');
 
-		// "play" all animated gifs and add youtube iframes to all youtube videos
+		// "play" all animated gifs and add youtube iframes to all youtube and vimeo videos
 		$.each($queetThumbsClone.find('img.attachment-thumb'),function(){
 			if($(this).attr('data-mime-type') == 'image/gif'
 			&& $(this).parent().hasClass('play-button')) {
 				$(this).attr('src',$(this).attr('data-full-image-url'));
 				$(this).parent('.thumb-container').css('background-image','url(\'' + $(this).attr('data-full-image-url') + '\')');
 				}
-			else if($(this).parent().hasClass('youtube')){
-
-				// autoplay a clicked video
-				var autoplayFlag = '';
-				if($(this).parent().hasClass('display-this-thumb')) {
-					autoplayFlag = '&autoplay=1';
-					}
-
-				var youtubeId = $(this).attr('data-full-image-url').replace('http://www.youtube.com/watch?v=','').replace('https://www.youtube.com/watch?v=','').replace('http://youtu.be/','').replace('https://youtu.be/','').substr(0,11);
-				$(this).parent().prepend('<iframe width="510" height="315" src="//www.youtube.com/embed/' + youtubeId + '?enablejsapi=1&version=3&playerapiid=ytplayer' + autoplayFlag + '" frameborder="0" allowscriptaccess="always" allowfullscreen></iframe>');
+			else if($(this).parent().hasClass('host-youtube-com')){
+				$(this).parent().prepend('<iframe width="510" height="315" src="' + youTubeEmbedLinkFromURL($(this).attr('data-full-image-url'), $(this).parent().hasClass('display-this-thumb')) + '" frameborder="0" allowscriptaccess="always" allowfullscreen></iframe>');
+				}
+			else if($(this).parent().hasClass('host-vimeo-com')){
+				$(this).parent().prepend('<iframe src="' + vimeoEmbedLinkFromURL($(this).attr('data-full-image-url'), $(this).parent().hasClass('display-this-thumb')) + '" width="510" height="315" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>');
 				}
 			});
 
@@ -1540,7 +2205,7 @@ $('body').on('click','.stream-item .queet img.attachment-thumb',function (event)
 
 		if(parentStreamItem.hasClass('expanded')) {
 
-			var calculatedDimensions = calculatePopUpAndImageDimensions($thumbToDisplay.attr('src'));
+			var calculatedDimensions = calculatePopUpAndImageDimensions($thumbToDisplay);
 			var $thisImgInQueetThumbsClone = $queetThumbsClone.find('img[src="' + $thumbToDisplay.attr('src') + '"]');
 
 			// set dimensions
@@ -1550,14 +2215,24 @@ $('body').on('click','.stream-item .queet img.attachment-thumb',function (event)
 			$thisImgInQueetThumbsClone.parent('.thumb-container').children('iframe').attr('height',calculatedDimensions.displayImgHeight);
 
 			// open popup
-			popUpAction('queet-thumb-popup', '', '' + $queetThumbsClone.outerHTML() + '', footerHTML, calculatedDimensions.popUpWidth);
+			popUpAction('queet-thumb-popup', '', '' + $queetThumbsClone.outerHTML() + '', parentStreamItemHTMLWithoutFooter, calculatedDimensions.popUpWidth);
 			disableOrEnableNavigationButtonsInImagePopup($('#queet-thumb-popup'));
+
+			// for some reason vimeo autoplays when we have a #t=x start time, so stop any vimeo videos running in the background (delay so it has time to load)
+			setTimeout(function(){
+				$.each($('#queet-thumb-popup').find('.thumb-container.host-vimeo-com:not(.display-this-thumb)').children('iframe'),function(){
+					console.log($(this).attr('src'));
+					this.contentWindow.postMessage('{"method": "pause"}', '*');
+					});
+				},1000);
 			}
 		}
 	});
 
 // popups can be max 900px wide, and should not be higher than the window, so we need to do some calculating
-function calculatePopUpAndImageDimensions(img_src) {
+function calculatePopUpAndImageDimensions(img) {
+
+		var img_src = img.attr('src');
 
 		// trick to get width and height, we can't go with what gnusocial tells us, because
 		// gnusocial doesn't (always?) report width and height after proper orientation
@@ -1617,7 +2292,14 @@ function calculatePopUpAndImageDimensions(img_src) {
 				var popUpWidth = 900;
 				}
 			}
-	return {popUpWidth: popUpWidth, displayImgWidth: displayImgWidth};
+
+	// vimeo can't be too small, or the design freaks out
+	if(img.parent('.thumb-container').hasClass('host-vimeo-com') && displayImgWidth < 540) {
+		displayImgWidth = 540;
+		displayImgHeight = 305;
+		}
+
+	return {popUpWidth: popUpWidth, displayImgWidth: displayImgWidth, displayImgHeight: displayImgHeight };
 	}
 
 // switch to next image when clicking the image in the popup
@@ -1628,15 +2310,23 @@ $('body').on('click','#queet-thumb-popup .attachment-thumb',function (event) {
 	if(nextImage.length>0) {
 
 		// start and stop youtube videos, if any
-		$.each($(this).parent('.youtube').children('iframe'),function(){
+		$.each($(this).parent('.host-youtube-com').children('iframe'),function(){
 			this.contentWindow.postMessage('{"event":"command","func":"' + 'stopVideo' + '","args":""}', '*');
 			});
-		$.each(nextImage.parent('.youtube').children('iframe'),function(){
+		$.each(nextImage.parent('.host-youtube-com').children('iframe'),function(){
 			this.contentWindow.postMessage('{"event":"command","func":"' + 'playVideo' + '","args":""}', '*');
 			});
 
+		// start stop vimeo
+		$.each($(this).parent('.host-vimeo-com').children('iframe'),function(){
+			this.contentWindow.postMessage('{"method": "pause"}', '*');
+			});
+		$.each(nextImage.parent('.host-vimeo-com').children('iframe'),function(){
+			this.contentWindow.postMessage('{"method": "play"}', '*');
+			});
+
 		// set dimensions of next image and the popup
-		var calculatedDimensions = calculatePopUpAndImageDimensions(nextImage.attr('src'));
+		var calculatedDimensions = calculatePopUpAndImageDimensions(nextImage);
 		nextImage.width(calculatedDimensions.displayImgWidth);
 		nextImage.parent('.thumb-container').width(calculatedDimensions.displayImgWidth);
 		nextImage.parent('.thumb-container').children('iframe').attr('width',calculatedDimensions.displayImgWidth);
@@ -1661,15 +2351,23 @@ $('body').on('click','#queet-thumb-popup .prev-thumb',function (event) {
 	if(prevImage.length>0) {
 
 		// start and stop youtube videos, if any
-		$.each($(this).parent().find('.display-this-thumb.youtube').children('iframe'),function(){
+		$.each($(this).parent().find('.display-this-thumb.host-youtube-com').children('iframe'),function(){
 			this.contentWindow.postMessage('{"event":"command","func":"' + 'stopVideo' + '","args":""}', '*');
 			});
-		$.each(prevImage.parent('.youtube').children('iframe'),function(){
+		$.each(prevImage.parent('.host-youtube-com').children('iframe'),function(){
 			this.contentWindow.postMessage('{"event":"command","func":"' + 'playVideo' + '","args":""}', '*');
 			});
 
+		// start stop vimeo
+		$.each($(this).parent().find('.display-this-thumb.host-vimeo-com').children('iframe'),function(){
+			this.contentWindow.postMessage('{"method": "pause"}', '*');
+			});
+		$.each(prevImage.parent('.host-vimeo-com').children('iframe'),function(){
+			this.contentWindow.postMessage('{"method": "play"}', '*');
+			});
+
 		// set dimensions of next image and the popup
-		var calculatedDimensions = calculatePopUpAndImageDimensions(prevImage.attr('src'));
+		var calculatedDimensions = calculatePopUpAndImageDimensions(prevImage);
 		prevImage.width(calculatedDimensions.displayImgWidth);
 		prevImage.parent('.thumb-container').width(calculatedDimensions.displayImgWidth);
 		prevImage.parent('.thumb-container').children('iframe').attr('width',calculatedDimensions.displayImgWidth);
@@ -1701,13 +2399,12 @@ function disableOrEnableNavigationButtonsInImagePopup(popUp) {
 
 /* ·
    ·
-   ·   Collapse all open conversations, ellipsis menus and the welcome text on esc or when clicking the margin
+   ·   Collapse all open conversations and the welcome text on esc or when clicking the margin
    ·
    · · · · · · · · · · · · · */
 
 $('body').click(function(event){
-	if($(event.target).is('body')) {
-		$('.action-ellipsis-container').children('.dropdown-menu').remove();
+	if($(event.target).is('body') || $(event.target).is('#page-container')) {
 		$('.front-welcome-text.expanded > .show-full-welcome-text').trigger('click');
 		$.each($('.stream-item.expanded'),function(){
 			expand_queet($(this), false);
@@ -1717,7 +2414,6 @@ $('body').click(function(event){
 
 $(document).keyup(function(e){
 	if(e.keyCode==27) { // esc
-		$('.action-ellipsis-container').children('.dropdown-menu').remove();
 		$('.front-welcome-text.expanded > .show-full-welcome-text').trigger('click');
 		$.each($('.stream-item.expanded'),function(){
 			expand_queet($(this), false);
@@ -1732,9 +2428,9 @@ $(document).keyup(function(e){
    ·
    · · · · · · · · · · · · · */
 
-$('body').on('click','.action-ellipsis-container .delete-queet',function(e){
-	e.preventDefault();
-	var this_stream_item = $(this).closest('.stream-item');
+function deleteQueet(arg) {
+
+	var this_stream_item = $('.stream-item[data-quitter-id="' + arg.streamItemID + '"]');
 
 	// don't do anything if this is a queet being posted
 	if(this_stream_item.hasClass('temp-post')) {
@@ -1742,10 +2438,11 @@ $('body').on('click','.action-ellipsis-container .delete-queet',function(e){
 		}
 
 	var this_qid = this_stream_item.attr('data-quitter-id');
-	var $queetHtml = $('<div>').append(this_stream_item.html());
-	var $stuffToRemove = $queetHtml.find('.stream-item-footer, .expanded-content, .inline-reply-queetbox, .stream-item.conversation, .view-more-container-top, .view-more-container-bottom');
-	$stuffToRemove.remove();
-	var queetHtmlWithoutFooterAndConversation = $queetHtml.html();
+
+	var $queetHtml = $(this_stream_item.outerHTML());
+	$queetHtml.children('.stream-item.conversation').remove();
+	$queetHtml.find('.context,.stream-item-footer,.inline-reply-queetbox,.expanded-content').remove();
+	var queetHtmlWithoutFooterAndConversation = $queetHtml.outerHTML();
 
 	popUpAction('popup-delete-' + this_qid, window.sL.deleteConfirmation,queetHtmlWithoutFooterAndConversation,'<div class="right"><button class="close">' + window.sL.cancelVerb + '</button><button class="primary">' + window.sL.deleteVerb + '</button></div>');
 
@@ -1756,10 +2453,8 @@ $('body').on('click','.action-ellipsis-container .delete-queet',function(e){
 		postActionToAPI('statuses/destroy/' + this_qid + '.json', function(data) {
 			if(data) {
 				remove_spinner();
-				// remove the stream-item clicked and all other displays of this object from dom (e.g. in conversation)
-				$('.stream-item[data-quitter-id="' + this_qid + '"]').find('.queet').animate({opacity:'0'},700,function(){
-					$('.stream-item[data-quitter-id="' + this_qid + '"]').remove();
-					});
+				window.knownDeletedNotices[$('.stream-item[data-quitter-id="' + this_qid + '"]').attr('data-uri')] = true;
+				slideUpAndRemoveStreamItem($('.stream-item[data-quitter-id="' + this_qid + '"]'));
 				}
 			else {
 				remove_spinner();
@@ -1767,7 +2462,7 @@ $('body').on('click','.action-ellipsis-container .delete-queet',function(e){
 			});
 		});
 
-	});
+	}
 
 
 /* ·
@@ -1806,9 +2501,9 @@ $('body').on('click','.action-rt-container .icon:not(.is-mine)',function(){
 				getFavsAndRequeetsForQueet(this_stream_item, this_stream_item.attr('data-quitter-id'));
 
 				// mark all instances of this notice as repeated
-				$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').addClass('requeeted');
-				$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').attr('data-requeeted-by-me-id',data.id);
-				$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').children('.queet').find('.action-rt-container').children('.with-icn').addClass('done');
+				$('.stream-item[data-quitter-id="' + data.retweeted_status.id + '"]').addClass('requeeted');
+				$('.stream-item[data-quitter-id="' + data.retweeted_status.id + '"]').attr('data-requeeted-by-me-id',data.id);
+				$('.stream-item[data-quitter-id="' + data.retweeted_status.id + '"]').children('.queet').find('.action-rt-container').children('.with-icn').addClass('done');
 				}
 			else {
 				// error
@@ -1822,13 +2517,34 @@ $('body').on('click','.action-rt-container .icon:not(.is-mine)',function(){
 	else if(this_action.children('.with-icn').hasClass('done')) {
 		display_spinner();
 
-		var my_rq_id = this_stream_item.attr('data-requeeted-by-me-id');
-		unRequeet(this_stream_item, this_action, my_rq_id);
+		var myRequeetID = this_stream_item.attr('data-requeeted-by-me-id');
 
-		// mark all instances of this notice as non-repeated
-		$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').removeClass('requeeted');
-		$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').removeAttr('data-requeeted-by-me-id');
-		$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').children('.queet').find('.action-rt-container').children('.with-icn').removeClass('done');
+		// display button as unrepeated
+		this_action.children('.with-icn').removeClass('done');
+		this_action.find('.with-icn b').html(window.sL.requeetVerb);
+		this_stream_item.removeClass('requeeted');
+
+		// post unrequeet
+		postActionToAPI('statuses/destroy/' + myRequeetID + '.json', function(data) {
+			if(data) {
+				// remove my repeat-notice from the feed, if it's there
+				slideUpAndRemoveStreamItem($('.stream-item[data-quitter-id-in-stream="' + myRequeetID + '"]'));
+
+				// mark all instances of this notice as non-repeated
+				$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').removeClass('requeeted');
+				$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').removeAttr('data-requeeted-by-me-id');
+				$('.stream-item[data-quitter-id="' + this_stream_item.attr('data-quitter-id') + '"]').children('.queet').find('.action-rt-container').children('.with-icn').removeClass('done');
+
+				getFavsAndRequeetsForQueet(this_stream_item, this_stream_item.attr('data-quitter-id'));
+				remove_spinner();
+				}
+			else {
+				remove_spinner();
+				this_action.children('.with-icn').addClass('done');
+				this_action.find('.with-icn b').html(window.sL.requeetedVerb);
+				this_stream_item.addClass('requeeted');
+				}
+			});
 		}
 	});
 
@@ -1941,24 +2657,22 @@ $('body').on('click','.action-reply-container',function(){
 	var this_stream_item_id = this_stream_item.attr('data-quitter-id');
 	this_stream_item.addClass('replying-to');
 
-	// grabbing the queet and view it in the popup, stripped of footer, reply box and other sruff
-	var $queetHtml = $('<div>').append(this_stream_item.children('.queet').outerHTML());
-	var $queetHtmlFooter = $queetHtml.find('.stream-item-footer');
-	$queetHtmlFooter.remove();
-	var $queetHtmlQueetBox = $queetHtml.find('.inline-reply-queetbox');
-	$queetHtmlQueetBox.remove();
-	var $queetHtmlExpandedContent = $queetHtml.find('.expanded-content');
-	$queetHtmlExpandedContent.remove();
-	var queetHtmlWithoutFooter = $queetHtml.html();
-	popUpAction('popup-reply-' + this_stream_item_id, window.sL.replyTo + ' ' + this_stream_item.children('.queet').find('.screen-name').html(),replyFormHtml(this_stream_item,this_stream_item_id),queetHtmlWithoutFooter);
+	// grabbing the stream-item and view it in the popup, stripped of conversation footer, reply box and other sruff
+	var streamItemHTML = $('<div/>').html(this_stream_item.outerHTML());
+	cleanStreamItemsFromClassesAndConversationElements(streamItemHTML);
+	streamItemHTML.find('.context,.stream-item-footer').remove();
+	var streamItemHTMLWithoutFooter = streamItemHTML.outerHTML();
 
-	// fix the width of the queet box, otherwise the syntax highlighting break
-	var queetBoxWidth = $('#popup-reply-' + this_stream_item_id).find('.modal-body').find('.inline-reply-queetbox').width()-20;
-	$('#popup-reply-' + this_stream_item_id).find('.modal-body').find('.queet-box-syntax').width(queetBoxWidth);
-	$('#popup-reply-' + this_stream_item_id).find('.modal-body').find('.syntax-middle').width(queetBoxWidth);
-	$('#popup-reply-' + this_stream_item_id).find('.modal-body').find('.syntax-two').width(queetBoxWidth);
+	popUpAction('popup-reply-' + this_stream_item_id, window.sL.replyTo + ' ' + this_stream_item.children('.queet').find('.screen-name').html(),replyFormHtml(this_stream_item,this_stream_item_id),streamItemHTMLWithoutFooter);
 
 	$('#popup-reply-' + this_stream_item_id).find('.modal-body').find('.queet-box').trigger('click'); // expand
+
+	// fix the width of the queet box, otherwise the syntax highlighting break
+	var queetBox = $('#popup-reply-' + this_stream_item_id).find('.modal-body').find('.inline-reply-queetbox');
+	var queetBoxWidth = queetBox.width()-20;
+	queetBox.children('.queet-box-syntax, .syntax-middle, .syntax-two').width(queetBoxWidth);
+
+	maybePrefillQueetBoxWithCachedText(queetBox.children('.queet-box'));
 	});
 
 
@@ -1969,12 +2683,13 @@ $('body').on('click','.action-reply-container',function(){
    · · · · · · · · · · · · · */
 
 $('body').on('click','#top-compose',function(){
-	popUpAction('popup-compose', window.sL.compose,queetBoxHtml(),false);
+	popUpAction('popup-compose', window.sL.compose,queetBoxPopUpHtml(),false);
 	var queetBoxWidth = $('#popup-compose').find('.inline-reply-queetbox').width()-20;
 	$('#popup-compose').find('.queet-box-syntax').width(queetBoxWidth);
 	$('#popup-compose').find('.syntax-middle').width(queetBoxWidth);
 	$('#popup-compose').find('.syntax-two').width(queetBoxWidth);
 	$('#popup-compose').find('.queet-box').trigger('click');
+	maybePrefillQueetBoxWithCachedText($('#popup-compose').find('.queet-box'));
 	});
 
 
@@ -2004,6 +2719,7 @@ $(document).keyup(function(e){
 	if(e.keyCode==27) {
 		$('.stream-item').removeClass('replying-to');
 		$('.modal-container').remove();
+		$('*').blur();
 		abortEditProfile();
 		}
 	});
@@ -2039,7 +2755,7 @@ $('body').on('click', '.queet-toolbar button',function () {
 
 		var queetTempText = replaceHtmlSpecialChars(queetText.replace(/\n/g,'<br>')); // no xss
 		queetTempText = queetTempText.replace(/&lt;br&gt;/g,'<br>'); // but preserve line breaks
-		var queetHtml = '<div id="' + tempPostId + '" class="stream-item conversation temp-post" style="opacity:1"><div class="queet"><span class="dogear"></span><div class="queet-content"><div class="stream-item-header"><a class="account-group"><img class="avatar" src="' + $('#user-avatar').attr('src') + '" /><strong class="name">' + $('#user-name').html() + '</strong> <span class="screen-name">@' + $('#user-screen-name').html() + '</span></a><small class="created-at">posting</small></div><div class="queet-text">' + queetTempText + '</div><div class="stream-item-footer"><ul class="queet-actions"><li class="action-reply-container"><a class="with-icn"><span class="icon sm-reply" title="' + window.sL.replyVerb + '"></span></a></li><li class="action-del-container"><a class="with-icn"><span class="icon sm-trash" title="' + window.sL.deleteVerb + '"></span></a></li></i></li><li class="action-fav-container"><a class="with-icn"><span class="icon sm-fav" title="' + window.sL.favoriteVerb + '"></span></a></li></ul></div></div></div></div>';
+		var queetHtml = '<div id="' + tempPostId + '" class="stream-item conversation temp-post" style="opacity:1"><div class="queet"><span class="dogear"></span><div class="queet-content"><div class="stream-item-header"><a class="account-group"><img class="avatar" src="' + $('#user-avatar').attr('src') + '" /><strong class="name">' + $('#user-name').html() + '</strong> <span class="screen-name">@' + $('#user-screen-name').html() + '</span></a><small class="created-at"> ' + window.sL.posting + '</small></div><div class="queet-text">' + queetTempText + '</div><div class="stream-item-footer"><ul class="queet-actions"><li class="action-reply-container"><a class="with-icn"><span class="icon sm-reply" title="' + window.sL.replyVerb + '"></span></a></li><li class="action-del-container"><a class="with-icn"><span class="icon sm-trash" title="' + window.sL.deleteVerb + '"></span></a></li></i></li><li class="action-fav-container"><a class="with-icn"><span class="icon sm-fav" title="' + window.sL.favoriteVerb + '"></span></a></li></ul></div></div></div></div>';
 		queetHtml = detectRTL(queetHtml);
 
 		// popup reply
@@ -2059,31 +2775,57 @@ $('body').on('click', '.queet-toolbar button',function () {
 		$('.modal-container').remove();
 
 		// try to find a queet to add the temp queet to:
+		var tempQueetInsertedInConversation = false;
 
 		// if the queet is in conversation, add it to parent's conversation
 		if($('.stream-item.replying-to').length > 0 && $('.stream-item.replying-to').hasClass('conversation')) {
-			$('.stream-item.replying-to').parent().append(queetHtml);
+			var insertedTempQueet = $(queetHtml).appendTo($('.stream-item.replying-to').parent());
+			findAndMarkLastVisibleInConversation($('.stream-item.replying-to').parent());
+			insertedTempQueet.parent().children('.view-more-container-bottom').remove(); // remove any view-more-container-bottom:s, they only cause trouble at this point
+			tempQueetInsertedInConversation = true;
 			}
 		// if the queet is expanded, add it to its conversation
 		else if($('.stream-item.replying-to').length > 0 && $('.stream-item.replying-to').hasClass('expanded')) {
-			$('.stream-item.replying-to').append(queetHtml);
+			var insertedTempQueet = $(queetHtml).appendTo($('.stream-item.replying-to'));
+			findAndMarkLastVisibleInConversation($('.stream-item.replying-to'));
+			insertedTempQueet.parent().children('.view-more-container-bottom').remove(); // remove any view-more-container-bottom:s, they only cause trouble at this point
+			tempQueetInsertedInConversation = true;
 			}
 		// maybe the replying-to class is missing but we still have a suiting place to add it
 		else if($('.stream-item.expanded[data-quitter-id="' + in_reply_to_status_id + '"]').length > 0) {
-			$('.stream-item.expanded[data-quitter-id="' + in_reply_to_status_id + '"]').append(queetHtml);
+			var insertedTempQueet = $(queetHtml).appendTo($('.stream-item.expanded[data-quitter-id="' + in_reply_to_status_id + '"]'));
+			findAndMarkLastVisibleInConversation($('.stream-item.expanded[data-quitter-id="' + in_reply_to_status_id + '"]'));
+			insertedTempQueet.parent().children('.view-more-container-bottom').remove(); // remove any view-more-container-bottom:s, they only cause trouble at this point
+			tempQueetInsertedInConversation = true;
 			}
 		// if we can't find a proper place, add it to top and remove conversation class
 		// if this is either 1) our home/all feed, 2) our user timeline or 3) whole site or 4) whole network
-		else if(window.currentStream.indexOf('statuses/friends_timeline.json') > -1
-		|| window.currentStream.indexOf('statuses/user_timeline.json?screen_name=' + window.loggedIn.screen_name) > -1
-		|| window.currentStream.indexOf('statuses/public_timeline.json') > -1
-		|| window.currentStream.indexOf('statuses/public_and_external_timeline.json') > -1 ) {
-			$('#feed-body').prepend(queetHtml.replace('class="stream-item conversation','class="stream-item'));
+		else if(window.currentStreamObject.name == 'friends timeline'
+			 || window.currentStreamObject.name == 'my profile'
+			 || window.currentStreamObject.name == 'public timeline'
+			 || window.currentStreamObject.name == 'public and external timeline') {
+			var insertedTempQueet = $(queetHtml).prependTo('#feed-body');
+			insertedTempQueet.removeClass('conversation');
 			}
 		// don't add it to the current stream, open a popup instead, without conversation class
 		else {
-			popUpAction('popup-sending', '',queetHtml.replace('class="stream-item conversation','class="stream-item'),false);
+			popUpAction('popup-sending','','',false);
+			var insertedTempQueet = $(queetHtml).prependTo($('#popup-sending').find('.modal-body'));
+			insertedTempQueet.removeClass('conversation');
 			}
+
+		// maybe post queet in groups
+		var postToGroups = '';
+		var postToGropsArray = new Array();
+		$.each(queetBox.siblings('.post-to-group'),function(){
+			postToGropsArray.push($(this).data('group-id'));
+			});
+		if(postToGropsArray.length > 0) {
+			postToGroups = postToGropsArray.join(':');
+			}
+
+		// remove any post-to-group-divs
+		queetBox.siblings('.post-to-group').remove();
 
 		// remove any replying-to classes
 		$('.stream-item').removeClass('replying-to');
@@ -2095,21 +2837,55 @@ $('body').on('click', '.queet-toolbar button',function () {
 		setTimeout('checkForNewQueets()', 1000);
 
 		// post queet
-		postQueetToAPI(queetText, in_reply_to_status_id, function(data){ if(data) {
+		postQueetToAPI(queetText, in_reply_to_status_id, postToGroups, function(data){ if(data) {
 
-			// show real queet
-			var new_queet = Array();
-			new_queet[0] = data;
-			addToFeed(new_queet,tempPostId,'visible', true);
+			var queetHtml = buildQueetHtml(data, data.id, 'visible posted-from-form', false, tempQueetInsertedInConversation);
+
+			// while we were waiting for our posted queet to arrive here, it may have already
+			// arrived in the automatic update of the feed, so if it's already there, we
+			// replace it (but not if the temp queet is inserted in a conversation of course, or if
+			// the user has had time to expand it)
+			var alredyArrived = $('#feed-body > .stream-item[data-quitter-id-in-stream=' + data.id + ']');
+			if(alredyArrived.length > 0 && tempQueetInsertedInConversation === false) {
+				if(!alredyArrived.hasClass('expanded')) {
+					alredyArrived.replaceWith(queetHtml);
+					}
+				}
+			else {
+				var newInsertedQueet = $(queetHtml).insertBefore(insertedTempQueet);
+				findAndMarkLastVisibleInConversation(insertedTempQueet.parent());
+
+				// make ranting easier, move the reply-form to this newly created notice
+				// if we have not started writing in it, or if it's missing
+				// only if this is an expanded conversation
+				// and only if we're ranting, i.e. no replies the queetbox
+				var parentQueetBox = insertedTempQueet.parent().find('.inline-reply-queetbox');
+				if(parentQueetBox.length == 0
+				|| parentQueetBox.children('.syntax-middle').css('display') == 'none') {
+					if(insertedTempQueet.parent().hasClass('expanded') || insertedTempQueet.parent().hasClass('conversation')) {
+						if(parentQueetBox.children('.queet-box').attr('data-replies-text') == '') {
+							insertedTempQueet.parent().find('.inline-reply-queetbox').remove();
+							newInsertedQueet.children('.queet').append(replyFormHtml(newInsertedQueet,newInsertedQueet.attr('data-quitter-id')));
+							}
+						}
+					}
+				}
 
 			// remove temp queet
-			$('#' + tempPostId).remove();
+			insertedTempQueet.remove();
 
 			// clear queetbox input cache
 			localStorageObjectCache_STORE('queetBoxInput',queetBox.attr('id'),false);
 
 			// queet count
 			$('#user-queets strong').html(parseInt($('#user-queets strong').html(),10)+1);
+
+			// fadeout any posting-popups
+			setTimeout(function(){
+				$('#popup-sending').fadeOut(1000, function(){
+					$('#popup-sending').remove();
+					});
+				},100);
 
 			}});
 		}
@@ -2168,12 +2944,28 @@ $('body').on('click','button.shorten',function () {
    ·
    · · · · · · · · · · · · · */
 $('body').on('click','.reload-stream',function () {
-	$('.reload-stream').hide();
-	setNewCurrentStream(window.currentStream,function(){
-		$('.reload-stream').show();
-		},false);
+	reloadCurrentStream();
 	});
+// can be used a callback too, e.g. from profile pref toggles
+function reloadCurrentStream() {
+	setNewCurrentStream(URLtoStreamRouter(window.location.href),false,false,false);
+	}
 
+
+/* ·
+   ·
+   ·   Reload current stream and clear cache
+   ·
+   · · · · · · · · · · · · · */
+
+function reloadCurrentStreamAndClearCache() {
+
+	$('#feed-body').empty();
+	rememberStreamStateInLocalStorage();
+
+	// reload
+	reloadCurrentStream();
+	}
 
 /* ·
    ·
@@ -2196,13 +2988,14 @@ $('body').on('click contextmenu','.queet-box-syntax',function () {
 		$(this)[0].addEventListener("paste", stripHtmlFromPaste);
 		if(typeof $(this).attr('data-replies-text') != 'undefined') {
 			$(this).html(decodeURIComponent($(this).attr('data-replies-text')));
-			var repliesLen = decodeURIComponent($(this).attr('data-replies-text')).length-5;
+			var repliesLen = decodeURIComponent($(this).attr('data-replies-text')).replace('&nbsp;',' ').length;
 			setSelectionRange($(this)[0], repliesLen, repliesLen);
 			}
 		else {
 			$(this).html('');
 			}
 		$(this).trigger('input');
+		$(this).closest('.stream-item').addClass('replying-to');
 		}
 	});
 $('body').on('mousedown','.syntax-two',function () {
@@ -2210,10 +3003,20 @@ $('body').on('mousedown','.syntax-two',function () {
 	});
 $('body').on('blur','.queet-box-syntax',function (e) {
 
+	// empty the mention suggestions on blur, timeout because we want to capture clicks in .mentions-suggestions
+	setTimeout(function(){
+		$(this).siblings('.mentions-suggestions').empty();
+		},10);
+
 	// don't collapse if a toolbar button has been clicked
 	var clickedToolbarButtons = $(this).siblings('.queet-toolbar').find('button.clicked');
 	if(clickedToolbarButtons.length>0) {
 		clickedToolbarButtons.removeClass('clicked');
+		return true;
+		}
+
+	// don't collapse if an error message discard button has been clicked
+	if($(this).siblings('.error-message').children('.discard-error-message').length>0) {
 		return true;
 		}
 
@@ -2244,6 +3047,7 @@ $('body').on('blur','.queet-box-syntax',function (e) {
 	});
 
 function collapseQueetBox(qB) {
+	qB.closest('.stream-item').removeClass('replying-to');
 	qB.siblings('.upload-image-container').remove();
 	qB.siblings('.syntax-middle').css('display','none');
 	qB.siblings('.syntax-two').css('display','none');
@@ -2309,22 +3113,50 @@ $('body').on('keyup paste input', 'div.queet-box-syntax', function() {
 
 	// loop through the regexps and highlight
 	$.each(window.syntaxHighlightingRegexps,function(k,v){
-		while(currentVal.match(v)) {
+		var i = 0;
+		while(currentVal.match(v) && i < 100) { // 100 matches is enough, we don't want to get caught in an infinite loop here
 			var currentMatch = currentVal.match(v);
-			if(currentMatch[0].slice(-1) == '<'
-			|| currentMatch[0].slice(-1) == '&'
-			|| currentMatch[0].slice(-1) == '?'
-			|| currentMatch[0].slice(-1) == '!'
-			|| currentMatch[0].slice(-1) == ' '
-			|| currentMatch[0].slice(-1) == '-'
-			|| currentMatch[0].slice(-1) == ':'
-			|| currentMatch[0].slice(-1) == '.'
-			|| currentMatch[0].slice(-1) == ',') {
-				currentMatch[0] = currentMatch[0].slice(0,-1);
+
+			// too small match, probably a single ! or something, just replace that with its html code
+			if($.trim(currentMatch[0]).length < 2) {
+				currentVal = currentVal.replace(currentMatch[0],currentMatch[0].replace('#','&#35;').replace('@','&#64;').replace('.','&#046;').replace('!','&#33;'));
 				}
-			currentVal = currentVal.replace(currentMatch[0],'<span class="' + k + '">' + currentMatch[0].replace('#','&#35;').replace('@','&#64;').replace('.','&#046;').replace('!','&#33;') + '</span>')
+			// long enough match, create a mention span
+			else {
+				// don't include ending char, if any of these (but tags can contain and end with . and -)
+				if(currentMatch[0].slice(-1) == '<'
+				|| currentMatch[0].slice(-1) == '&'
+				|| currentMatch[0].slice(-1) == '?'
+				|| currentMatch[0].slice(-1) == '!'
+				|| currentMatch[0].slice(-1) == ' '
+				|| (currentMatch[0].slice(-1) == '-' && k != 'tag')
+				|| currentMatch[0].slice(-1) == ':'
+				|| (currentMatch[0].slice(-1) == '.' && k != 'tag')
+				|| currentMatch[0].slice(-1) == ','
+				|| currentMatch[0].slice(-1) == ')'
+				|| currentMatch[0].slice(-1) == '\'') {
+					currentMatch[0] = currentMatch[0].slice(0,-1);
+					}
+
+				// don't include these start strings
+				if(currentMatch[0].substring(0,1) == ' '
+				|| currentMatch[0].substring(0,1) == '(') {
+					currentMatch[0] = currentMatch[0].substring(1);
+					}
+				else if(currentMatch[0].substring(0,6) == '&nbsp;') {
+					currentMatch[0] = currentMatch[0].substring(6);
+					}
+
+				currentVal = currentVal.replace(currentMatch[0],'<span class="' + k + '">' + currentMatch[0].replace('#','&#35;').replace('@','&#64;').replace('.','&#046;').replace('!','&#33;') + '</span>')
+				}
+			i++;
 			}
 		});
+
+	// safari fix
+	if(typeof bowser.safari != 'undefined') {
+		currentVal = currentVal.replace(/&nbsp;<span/g,' <span');
+		}
 
 	$(this).siblings('.syntax-middle').html(currentVal);
 	});
@@ -2355,7 +3187,7 @@ $('body').on('keydown', '.queet-box-syntax', function(e) {
 	if($(this).siblings('.mentions-suggestions').children('div').length > 0) {
 
 		// enter or tab
-		if (e.keyCode == '13' || e.keyCode == '9') {
+		if (!e.ctrlKey && (e.keyCode == '13' || e.keyCode == '9')) {
 			e.preventDefault();
 			useSelectedMention($(this));
 			}
@@ -2389,19 +3221,37 @@ $('body').on('keydown', '.queet-box-syntax', function(e) {
 	});
 
 function useSelectedMention(queetBox){
+
 	// use selected
 	if(queetBox.siblings('.mentions-suggestions').children('div.selected').length > 0) {
-		var username = queetBox.siblings('.mentions-suggestions').children('div.selected').children('span').html();
+		var selectedSuggestion = queetBox.siblings('.mentions-suggestions').children('div.selected');
 		}
 	// if none selected, take top suggestion
 	else {
-		var username = queetBox.siblings('.mentions-suggestions').children('div').first().children('span').html();
+		var selectedSuggestion = queetBox.siblings('.mentions-suggestions').children('div').first();
+		}
+
+	var username = selectedSuggestion.children('span').html();
+	var name = selectedSuggestion.children('strong').html();
+
+	// if this is a group, we remember its id, the user might be member of multiple groups with the same username
+	if(selectedSuggestion.hasClass('group-suggestion')) {
+		var groupId = selectedSuggestion.data('group-id');
+		if(queetBox.siblings('.post-to-group[data-group-id="' + groupId + '"]').length < 1) {
+			if(queetBox.siblings('.post-to-group').length>0) {
+				var addAfter = queetBox.siblings('.post-to-group').last();
+				}
+			else {
+				var addAfter = queetBox;
+				}
+			addAfter.after('<div class="post-to-group" data-group-username="' + username + '" data-group-id="' + groupId + '">' + name + '</div>');
+			}
 		}
 
 	// replace the halfwritten username with the one we want
 	deleteBetweenCharacterIndices(queetBox[0], window.lastMention.mentionPos+1, window.lastMention.cursorPos);
 	var range = createRangeFromCharacterIndices(queetBox[0], window.lastMention.mentionPos+1, window.lastMention.mentionPos+1);
-	range.insertNode(document.createTextNode(username + ' '));
+	range.insertNode(document.createTextNode(username + '\u00a0')); // non-breaking-space, to prevent collapse
 
 	// put caret after
 	setSelectionRange(queetBox[0], window.lastMention.mentionPos+username.length+2, window.lastMention.mentionPos+username.length+2);
@@ -2409,7 +3259,22 @@ function useSelectedMention(queetBox){
 	queetBox.trigger('input'); // avoid some flickering
 	}
 
-// check for mentions
+// check for removed group mentions
+$('body').on('keyup', 'div.queet-box-syntax', function(e) {
+	var groupMentions = $(this).siblings('.post-to-group');
+	var queetBoxGroups = $(this).siblings('.syntax-middle').find('.group');
+	var queetBoxGroupsString = '';
+	$.each(queetBoxGroups,function(){
+		queetBoxGroupsString = queetBoxGroupsString + $(this).html() + ':';
+		});
+	$.each(groupMentions,function(){
+		if(queetBoxGroupsString.indexOf('!' + $(this).data('group-username') + ':') == -1) {
+			$(this).remove();
+			}
+		});
+	});
+
+// check for user mentions
 window.lastMention = new Object();
 $('body').on('keyup', 'div.queet-box-syntax', function(e) {
 
@@ -2436,7 +3301,7 @@ $('body').on('keyup', 'div.queet-box-syntax', function(e) {
 				}
 			if((contents.lastIndexOf('@')+match[0].length) == cursorPos) {
 
-				queetBox.siblings('.mentions-suggestions').empty();
+				queetBox.siblings('.mentions-suggestions').children('.user-suggestion').remove();
 				queetBox.siblings('.mentions-suggestions').css('top',(queetBox.height()+20) + 'px');
 				var term = match[0].substring(match[0].lastIndexOf('@')+1, match[0].length).toLowerCase();
 				window.lastMention.mentionPos = mentionPos;
@@ -2468,20 +3333,105 @@ $('body').on('keyup', 'div.queet-box-syntax', function(e) {
 					if(suggestionsUsernameCount[this.username]>1 && this.url !== false) {
 						serverHtml = '@' + this.url;
 						}
-					queetBox.siblings('.mentions-suggestions').append('<div title="@' + this.username + serverHtml + '"><img height="24" width="24" src="' + this.avatar + '" /><strong>' + this.name + '</strong> @<span>' + this.username + serverHtml + '</span></div>')
+					queetBox.siblings('.mentions-suggestions').append('<div class="user-suggestion" title="@' + this.username + serverHtml + '"><img height="24" width="24" src="' + this.avatar + '" /><strong>' + this.name + '</strong> @<span>' + this.username + serverHtml + '</span></div>')
 					});
 
 				}
 			else {
-				queetBox.siblings('.mentions-suggestions').empty();
+				queetBox.siblings('.mentions-suggestions').children('.user-suggestion').remove();
 				}
 
 			}
 		else {
-			queetBox.siblings('.mentions-suggestions').empty();
+			queetBox.siblings('.mentions-suggestions').children('.user-suggestion').remove();
 			}
 		}
 	});
+
+
+// check for group mentions
+$('body').on('keyup', 'div.queet-box-syntax', function(e) {
+
+	var queetBox = $(this);
+	var cursorPosArray = getSelectionInElement(queetBox[0]);
+	var cursorPos = cursorPosArray[0];
+
+	// add space before linebreaks (to separate mentions in beginning of new lines when .text():ing later)
+	if(e.keyCode == '13') {
+		e.preventDefault();
+		var range = createRangeFromCharacterIndices(queetBox[0], cursorPos, cursorPos);
+		range.insertNode(document.createTextNode(" \n"));
+		}
+	else if(e.keyCode != '40' && e.keyCode != '38' && e.keyCode != '13' && e.keyCode != '9') {
+		var contents = queetBox.text().substring(0,cursorPos);
+		var mentionPos = contents.lastIndexOf('!');
+		var check_contents = contents.substring(mentionPos - 1, cursorPos);
+		var regex = /(^|\s|\.|\n)(!)[a-zA-Z0-9]+/;
+		var match = check_contents.match(regex);
+		if (contents.indexOf('!') >= 0 && match) {
+
+			if(contents.lastIndexOf('!') > 1) {
+				match[0] = match[0].substring(1,match[0].length);
+				}
+			if((contents.lastIndexOf('!')+match[0].length) == cursorPos) {
+
+				queetBox.siblings('.mentions-suggestions').children('.group-suggestion').remove();
+				queetBox.siblings('.mentions-suggestions').css('top',(queetBox.height()+20) + 'px');
+				var term = match[0].substring(match[0].lastIndexOf('!')+1, match[0].length).toLowerCase();
+				window.lastMention.mentionPos = mentionPos;
+				window.lastMention.cursorPos = cursorPos;
+
+
+				// see if any group we're member of matches
+				var suggestionsToShow = [];
+				var suggestionsUsernameCount = {};
+				$.each(window.groupMemberships,function(){
+					var userregex = new RegExp(term);
+					if(this.username.toLowerCase().match(userregex) || this.name.toLowerCase().match(userregex)) {
+						suggestionsToShow.push({id:this.id, avatar:this.avatar, name:this.name, username:this.username,url:this.url});
+
+						// count the usernames to see if we need to show the server for any of them
+						if(typeof suggestionsUsernameCount[this.username] != 'undefined') {
+							suggestionsUsernameCount[this.username] = suggestionsUsernameCount[this.username] + 1;
+							}
+						else {
+							suggestionsUsernameCount[this.username] = 1;
+							}
+						}
+					});
+
+				// show matches
+				$.each(suggestionsToShow,function(){
+					var serverHtml = '';
+					if(suggestionsUsernameCount[this.username]>1 && this.url !== false) {
+						serverHtml =  this.url + '/group/';
+						}
+					queetBox.siblings('.mentions-suggestions').append('<div class="group-suggestion" title="' + serverHtml + this.username + '" data-group-id="' + this.id + '"><img height="24" width="24" src="' + this.avatar + '" /><strong>' + this.name + '</strong> !<span>' + this.username + '</span></div>')
+					});
+
+				}
+			else {
+				queetBox.siblings('.mentions-suggestions').children('.group-suggestion').remove();
+				}
+
+			}
+		else {
+			queetBox.siblings('.mentions-suggestions').children('.group-suggestion').remove();
+			}
+		}
+	});
+
+
+/* ·
+   ·
+   ·   Any click empties the mentions-suggestions
+   ·
+   · · · · · · · · · · · · · */
+
+$(document).click(function() {
+	$('.mentions-suggestions').empty();
+	});
+
 
 /* ·
    ·
@@ -2490,15 +3440,29 @@ $('body').on('keyup', 'div.queet-box-syntax', function(e) {
    · · · · · · · · · · · · · */
 
 $('body').on('keyup', 'div.queet-box-syntax', function(e) {
+
+	var thisId = $(this).attr('id');
+	var thisText = $.trim($(this).text());
+
+	// keep in global var to avoid doing all these operations every keystroke
+	if(typeof window.queetBoxCurrentlyActive == 'undefined'
+	|| window.queetBoxCurrentlyActive.id != thisId) {
+		window.queetBoxCurrentlyActive = {
+			id: thisId,
+			startText: $.trim($('<div/>').append(decodeURIComponent($(this).attr('data-start-text'))).text()),
+			repliesText: $.trim($('<div/>').append(decodeURIComponent($(this).attr('data-replies-text'))).text())
+			};
+		}
+
 	// remove from cache if empty, or same as default text
-	if($.trim($(this).text()) == ''
-	|| $.trim($(this).text()) == window.sL.compose
-	|| $.trim($(this).text()) == $.trim(decodeURIComponent($(this).attr('data-start-text')))
-	|| $.trim($(this).text()) == $.trim(decodeURIComponent($(this).attr('data-replies-text')))) {
-		localStorageObjectCache_STORE('queetBoxInput',$(this).attr('id'),false);
+	if(thisText == ''
+	|| thisText == window.sL.compose
+	|| thisText == window.queetBoxCurrentlyActive.startText
+	|| thisText == window.queetBoxCurrentlyActive.repliesText) {
+		localStorageObjectCache_STORE('queetBoxInput',thisId,false);
 		}
 	else {
-		localStorageObjectCache_STORE('queetBoxInput',$(this).attr('id'),$(this).html());
+		localStorageObjectCache_STORE('queetBoxInput',thisId,$(this).html());
 		}
 	});
 
@@ -2511,6 +3475,12 @@ $('body').on('keyup', 'div.queet-box-syntax', function(e) {
 
 // menu
 $('#shortcuts-link').click(function(){
+
+	// not if disabled
+	if($(this).hasClass('disabled')) {
+		return true;
+		}
+
 	popUpAction('popup-shortcuts', window.sL.keyboardShortcuts,'<div id="shortcuts-container"></div>',false);
 	getDoc('shortcuts',function(html){
 		$('#shortcuts-container').html(html);
@@ -2520,6 +3490,12 @@ $('#shortcuts-link').click(function(){
 
 // send queet on ctrl+enter or ⌘+enter (mac)
 $('body').on('keydown','.queet-box-syntax',function (e) {
+
+	// do nothing if shortcuts are disabled
+	if(window.disableKeyboardShortcuts === true) {
+		return true;
+		}
+
 	if((e.ctrlKey && e.which == 13)
 	|| (e.metaKey && e.which == 13)) {
 		e.preventDefault();
@@ -2531,13 +3507,18 @@ $('body').on('keydown','.queet-box-syntax',function (e) {
 
 $('body').keyup(function (e) {
 
+	// do nothing if shortcuts are disabled
+	if(window.disableKeyboardShortcuts === true) {
+		return true;
+		}
+
 	// only if queetbox is blurred, and we're not typing in any input, and we're logged in
 	if($('.queet-box-syntax[contenteditable="true"]').length == 0
 	&& $(":focus").length == 0
 	&& window.loggedIn !== false) {
 
 		// shortcuts documentation on '?'
-		if(e.shiftKey && (e.which == 171 || e.which == 191)) {
+		if(e.shiftKey && (e.which == 171 || e.which == 191)) {
 			$('#shortcuts-link').click();
 			}
 
@@ -2560,14 +3541,14 @@ $('body').keyup(function (e) {
 			// next queet on 'j'
 			if(e.which == 74) {
 				selectedQueet.removeClass('selected-by-keyboard');
-				var next = selectedQueet.nextAll('.visible').not('.activity').first();
+				var next = selectedQueet.nextAll('.visible').not('.always-hidden').first();
 				next.addClass('selected-by-keyboard');
 				scrollToQueet(next);
 				}
 			// prev queet on 'k'
 			else if(e.which == 75) {
 				selectedQueet.removeClass('selected-by-keyboard');
-				var prev = selectedQueet.prevAll('.visible').not('.activity').first();
+				var prev = selectedQueet.prevAll('.visible').not('.always-hidden').first();
 				prev.addClass('selected-by-keyboard');
 				scrollToQueet(prev);
 				}
@@ -2586,7 +3567,7 @@ $('body').keyup(function (e) {
 			// reply to queet on 'r'
 			else if(e.which == 82) {
 				if(selectedQueet.hasClass('expanded')) {
-					selectedQueet.children('.queet').find('.queet-box-syntax').click();
+					selectedQueet.find('.queet-box-syntax').click();
 					}
 				else {
 					selectedQueet.children('.queet').find('.icon.sm-reply').click();
@@ -2640,8 +3621,8 @@ $('body').on('click','.view-more-container-top', function(){
 $('body').on('click','.show-full-conversation',function(){
 
 	var this_q = $(this).closest('.queet');
-	var this_qid = $(this).closest('.stream-item:not(.conversation)').attr('data-quitter-id');
-	var thisStreamItem = $('#stream-item-' + $(this).attr('data-stream-item-id'));
+	var thisStreamItem = this_q.parent();
+	var this_qid = thisStreamItem.attr('data-quitter-id');
 
 	rememberMyScrollPos(this_q,this_qid);
 
@@ -2667,7 +3648,7 @@ $('body').on('click','.show-full-conversation',function(){
    ·
    · · · · · · · · · · · · · */
 
-$('body').on('click','.edit-profile-button',function(){
+$('body').on('click','#page-container > .profile-card .edit-profile-button',function(){
 	if(!$(this).hasClass('disabled')) {
 		$(this).addClass('disabled');
 		$('html').scrollTop(0);
@@ -2683,6 +3664,7 @@ $('body').on('click','.edit-profile-button',function(){
 				if(data.cover_photo !== false) {
 					coverPhotoHtml = 'background-image:url(\'' + data.cover_photo + '\')';
 					}
+				$('.hover-card,.hover-card-caret').remove();
 				$('#edit-profile-popup').prepend('\
 					<div class="edit-profile-container">\
 			  			<div class="upload-background-image"></div>\
@@ -2852,17 +3834,29 @@ $('body').on('click','.crop-and-save-button',function(){
 
 		// if this is the cover photo
 		if($('#edit-profile-popup .jwc_frame.cover-photo-to-crop').length>0) {
-			$.ajax({ url: window.apiRoot + 'qvitter/update_cover_photo.json',
-				type: "POST",
-				data: {
-					cropH: 	window.jwc.result.cropH,
-					cropW: 	window.jwc.result.cropW,
-					cropX:	window.jwc.result.cropX,
-					cropY: 	window.jwc.result.cropY,
-					img:	$('#cover-photo-to-crop').attr('src')
+
+			var coverImgFormData = new FormData();
+			coverImgFormData.append('banner', $('#cover-photo-input')[0].files[0]);
+			coverImgFormData.append('height', window.jwc.result.cropH);
+			coverImgFormData.append('width', window.jwc.result.cropW);
+			coverImgFormData.append('offset_left', window.jwc.result.cropX);
+			coverImgFormData.append('offset_top', window.jwc.result.cropY);
+
+			$.ajax({
+				url:         window.apiRoot + 'account/update_profile_banner.json',
+				type:        "POST",
+				data:        coverImgFormData,
+				processData: false,
+				contentType: false,
+				cache:       false,
+				dataType:    "json",
+				error: function(data){
+					console.log('error saving profile banner'); console.log(data);
+					$('.crop-and-save-button').removeAttr('disabled');
+					$('.crop-and-save-button').removeClass('disabled');
+					cleanUpAfterCropping();
+					remove_spinner();
 					},
-				dataType:"json",
-				error: function(data){ console.log('error'); console.log(data); },
 				success: function(data) {
 					remove_spinner();
 					if(typeof data.error == 'undefined') {
@@ -2902,7 +3896,7 @@ $('body').on('click','.crop-and-save-button',function(){
 						$('.profile-picture').attr('href',data.profile_image_url_original);
 						$('.profile-picture img, #user-avatar').attr('src',data.profile_image_url_profile_size);
 						$('#settingslink .nav-session').css('background-image','url(\'' + data.profile_image_url_profile_size + '\')');
-						$('.account-group .name[data-user-id="' + window.myUserID + '"]').siblings('.avatar').attr('src',data.profile_image_url_profile_size);
+						$('.account-group .name[data-user-id="' + window.loggedIn.id + '"]').siblings('.avatar').attr('src',data.profile_image_url_profile_size);
 						}
 					 else {
 						alert('Try again! ' + data.error);
@@ -2995,16 +3989,8 @@ $('body').on('click','.upload-cover-photo, .upload-avatar, .upload-background-im
 		coverPhotoAndAvatarSelectAndCrop(e, coverOrAvatar);
 		})});
 
-	// trigger click for firefox
-	if(navigator.userAgent.toLowerCase().indexOf('firefox') > -1) {
-		$('#' + inputId).trigger('click');
-		}
-	// other browsers
-	else {
-		var evt = document.createEvent("HTMLEvents");
-		evt.initEvent("click", true, true);
-		$('#' + inputId)[0].dispatchEvent(evt);
-		}
+	// trigger click
+	triggerClickOnInputFile($('#' + inputId));
 
 	});
 
@@ -3014,8 +4000,6 @@ function coverPhotoAndAvatarSelectAndCrop(e, coverOrAvatar) {
 	if(coverOrAvatar == 'upload-cover-photo') {
 		var targetWidth = 588;
 		var targetHeight = 260;
-		var maxWidth = 1040;
-		var minWidth = 1040;
 		var cropId = 'cover-photo-to-crop';
 		}
 	else if(coverOrAvatar == 'upload-avatar') {
@@ -3109,7 +4093,7 @@ function cleanUpAfterCropping(){
 
 /* ·
    ·
-   ·   Upload image
+   ·   Upload attachment
    ·
    · · · · · · · · · · · · · */
 
@@ -3129,137 +4113,152 @@ $('body').on('click','.upload-image',function () {
 	var thisUploadButton = $(this);
 
 	$('#upload-image-input').one('click',function(){ // trick to make the change event only fire once when selecting a file
+		$(this).unbind('change');
 		$(this).one('change',function(e){
-			uploadImage(e, thisUploadButton);
+			uploadAttachment(e, thisUploadButton);
 			})
 		});
 
-	// trigger click for firefox
-	if(navigator.userAgent.toLowerCase().indexOf('firefox') > -1) {
-		$('#upload-image-input').trigger('click');
-		}
-	// other browsers
-	else {
-		var evt = document.createEvent("HTMLEvents");
-		evt.initEvent("click", true, true);
-		$('#upload-image-input')[0].dispatchEvent(evt);
-		}
+	// trigger click
+	triggerClickOnInputFile($('#upload-image-input'));
+
 	});
 
-function uploadImage(e, thisUploadButton) {
-	// get orientation
-	loadImage.parseMetaData(e.target.files[0], function (data) {
-		if (data.exif) {
-			var orientation = data.exif.get('Orientation');
-			}
-		else {
-			var orientation = 1;
-			}
+function uploadAttachment(e, thisUploadButton) {
 
-		// loader cover stuff
-		thisUploadButton.closest('.queet-toolbar').parent().append('<div class="queet-box-loading-cover"></div>');
-		thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-loading-cover').width(thisUploadButton.closest('.queet-toolbar').parent().outerWidth());
-		display_spinner(thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-loading-cover')[0]);
-		thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-loading-cover').find('.loader').css('top', (thisUploadButton.closest('.queet-toolbar').parent().outerHeight()/2-20) + 'px');
+	// loader cover stuff
+	thisUploadButton.closest('.queet-toolbar').parent().append('<div class="queet-box-loading-cover"></div>');
+	thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-loading-cover').width(thisUploadButton.closest('.queet-toolbar').parent().outerWidth());
+	display_spinner(thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-loading-cover')[0]);
+	thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-loading-cover').find('.loader').css('top', (thisUploadButton.closest('.queet-toolbar').parent().outerHeight()/2-20) + 'px');
 
-		// clean up
-		cleanUpAfterCropping();
+	var uploadButton = thisUploadButton.closest('.queet-toolbar').find('.upload-image');
+	var queetBox = thisUploadButton.closest('.queet-toolbar').siblings('.queet-box-syntax');
+	var caretPos = uploadButton.attr('data-caret-pos').split(',');
 
-		// create image
-		loadImage(e.target.files[0],
-				function (img) {
-					if(typeof img.target == 'undefined') {
-						// The preview image below queet box.
-						var appendedImg = thisUploadButton.closest('.queet-toolbar').before('<span class="upload-image-container"><img class="to-upload" src="' + img.toDataURL('image/jpeg') +  '" /></span>');
-						var imgFormData = new FormData();
-						imgFormData.append('media', $('#upload-image-input')[0].files[0]);
+	var imgFormData = new FormData();
+	imgFormData.append('media', $('#upload-image-input')[0].files[0]);
 
-						// upload
-						$.ajax({ url: window.apiRoot + 'statusnet/media/upload',
-							type: "POST",
-							data: imgFormData,
-							contentType: false,
-							processData: false,
-							dataType: "xml",
-							error: function(data){ console.log('error'); console.log(data); $('.queet-box-loading-cover').remove(); },
-							success: function(data) {
-								var rsp = $(data).find('rsp');
-								if (rsp.attr('stat') == 'ok') {
-									cleanUpAfterCropping();
+	// upload
+	$.ajax({ url: window.apiRoot + 'statusnet/media/upload',
+		type: "POST",
+		data: imgFormData,
+		contentType: false,
+		processData: false,
+		dataType: "xml",
+		error: function(data, textStatus, errorThrown){
+			showErrorMessage(window.sL.ERRORattachmentUploadFailed, queetBox.siblings('.syntax-two'));
+			$('.queet-box-loading-cover').remove();
+			queetBox.focus();
+			},
+		success: function(data) {
+			var rsp = $(data).find('rsp');
+			if (rsp.attr('stat') == 'ok') {
 
-									// If doing 'multiple' input element, maybe reply with many mediaurl elements
-									// and then rsp.find('mediaurl').each(...)?
-									var mediaurl = rsp.find('mediaurl').text();
-
-									var uploadButton = $('img.to-upload').parent().siblings('.queet-toolbar').find('.upload-image');
-									var queetBox = $('img.to-upload').parent().siblings('.queet-box-syntax');
-									var caretPos = uploadButton.attr('data-caret-pos').split(',');
-
-									// if this site is like quitter.se, we have to do this, otherwise
-									// gnusocial will not recognize the link to the image as a local attachment
-									if(window.thisSiteThinksItIsHttpButIsActuallyHttps) {
-										mediaurl = mediaurl.replace('https://','http://');
-										}
-
-									$('img.to-upload').attr('data-shorturl', mediaurl);
-									$('img.to-upload').addClass('uploaded');
-									$('img.to-upload').removeClass('to-upload');
-
-									// insert shorturl in queet box
-									deleteBetweenCharacterIndices(queetBox[0], caretPos[0], caretPos[1]);
-									var range = createRangeFromCharacterIndices(queetBox[0], caretPos[0], caretPos[0]);
-									if(typeof range == 'undefined') {
-										// if queetbox is empty no range is returned, and inserting will fail,
-										// so we insert a space and try to get range again...
-										queetBox.html('&nbsp;');
-									    range = createRangeFromCharacterIndices(queetBox[0], caretPos[0], caretPos[0]);
-										}
-									range.insertNode(document.createTextNode(' ' + mediaurl + ' '));
-
-									// put caret after
-									queetBox.focus();
-									var putCaretAt = parseInt(caretPos[0],10)+mediaurl.length+2;
-									setSelectionRange(queetBox[0], putCaretAt, putCaretAt);
-									queetBox.trigger('input'); // avoid some flickering
-									setTimeout(function(){ queetBox.trigger('input');},1); // make sure chars are counted and shorten-button activated
-									$('.queet-box-loading-cover').remove();
-									}
-								 else {
-									alert('Try again! ' + rsp.find('err').attr('msg'));
-									$('.save-profile-button').removeAttr('disabled');
-									$('.save-profile-button').removeClass('disabled');
-									$('img.to-upload').parent().remove();
-									$('.queet-box-loading-cover').remove();
-									}
-								 }
-							});
+				// maybe add thumbnail below queet box
+				if($(data).find('atom\\:link,link').length>0) {
+					var mimeType = $(data).find('atom\\:link,link').attr('type');
+					if(mimeType.indexOf('image/') == 0) {
+						var imgUrl = $(data).find('atom\\:link,link').attr('href');
+						thisUploadButton.closest('.queet-toolbar').before('<span class="upload-image-container"><img class="to-upload" src="' + imgUrl +  '" /></span>');
 						}
-					else {
-						remove_spinner();
-						$('.queet-box-loading-cover').remove();
-						alert('could not read image');
-						}
-					},
-				{ canvas: true,
-				  orientation: orientation } // Options
-			);
+					}
+
+				var mediaurl = rsp.find('mediaurl').text();
+
+				$('img.to-upload').attr('data-shorturl', mediaurl);
+				$('img.to-upload').addClass('uploaded');
+				$('img.to-upload').removeClass('to-upload');
+
+				// insert shorturl in queet box
+				deleteBetweenCharacterIndices(queetBox[0], caretPos[0], caretPos[1]);
+				var range = createRangeFromCharacterIndices(queetBox[0], caretPos[0], caretPos[0]);
+				if(typeof range == 'undefined') {
+					// if queetbox is empty no range is returned, and inserting will fail,
+					// so we insert a space and try to get range again...
+					queetBox.html('&nbsp;');
+				    range = createRangeFromCharacterIndices(queetBox[0], caretPos[0], caretPos[0]);
+					}
+				range.insertNode(document.createTextNode(' ' + mediaurl + ' '));
+
+				// put caret after
+				queetBox.focus();
+				var putCaretAt = parseInt(caretPos[0],10)+mediaurl.length+2;
+				setSelectionRange(queetBox[0], putCaretAt, putCaretAt);
+				queetBox.trigger('input'); // avoid some flickering
+				setTimeout(function(){ queetBox.trigger('input');},1); // make sure chars are counted and shorten-button activated
+				$('.queet-box-loading-cover').remove();
+				}
+			 else {
+				alert('Try again! ' + rsp.find('err').attr('msg'));
+				$('.save-profile-button').removeAttr('disabled');
+				$('.save-profile-button').removeClass('disabled');
+				$('img.to-upload').parent().remove();
+				$('.queet-box-loading-cover').remove();
+				}
+			 }
 		});
 
 	}
 
 /* ·
    ·
-   ·   Small edit profile button on mini-card. Go-to user stream and hit edit button
+   ·   Small edit profile button on hover cards goes to edit profile
    ·
    · · · · · · · · · · · · · */
 
-$('body').on('click','#mini-edit-profile-button, #edit-profile-header-link',function(){
-	if(window.currentStream == 'statuses/user_timeline.json?screen_name=' + window.loggedIn.screen_name)	{
-		$('.edit-profile-button').trigger('click');
-		}
-	else {
-		setNewCurrentStream('statuses/user_timeline.json?screen_name=' + window.loggedIn.screen_name, function(){
-			$('.edit-profile-button').trigger('click');
-			},true);
+$('body').on('click','.hover-card .edit-profile-button',function(){
+	goToEditProfile();
+	});
+
+
+/* ·
+   ·
+   ·   User menu when clicking the mini cog wheel in the logged in mini card
+   ·
+   · · · · · · · · · · · · · */
+
+$('body').on('click','#mini-logged-in-user-cog-wheel:not(.dropped)',function(){
+	var menu = $(getMenu(loggedInUsersMenuArray())).appendTo(this);
+	alignMenuToParent(menu,$(this));
+	$(this).addClass('dropped');
+	});
+// hide when clicking it again
+$('body').on('click','#mini-logged-in-user-cog-wheel.dropped',function(e){
+	if($(e.target).is('#mini-logged-in-user-cog-wheel')) {
+		$('#mini-logged-in-user-cog-wheel').children('.dropdown-menu').remove();
+		$('#mini-logged-in-user-cog-wheel').removeClass('dropped');
 		}
 	});
+// hide the menu when clicking outside it
+$('body').on('click',function(e){
+	if($('#mini-logged-in-user-cog-wheel').hasClass('dropped') && !$(e.target).closest('#mini-logged-in-user-cog-wheel').length>0) {
+		$('#mini-logged-in-user-cog-wheel').children('.dropdown-menu').remove();
+		$('#mini-logged-in-user-cog-wheel').removeClass('dropped');
+		}
+	});
+
+
+/* ·
+   ·
+   ·   Goes to edit profile
+   ·
+   · · · · · · · · · · · · · */
+
+function goToEditProfile(arg, callback) {
+	if(window.currentStreamObject.name == 'my profile') {
+		$('#page-container > .profile-card .edit-profile-button').trigger('click');
+		if(typeof callback == 'function') {
+			callback(true);
+			}
+		}
+	else {
+		setNewCurrentStream(pathToStreamRouter(window.loggedIn.screen_name), true, false, function(){
+			$('#page-container > .profile-card .edit-profile-button').trigger('click');
+			if(typeof callback == 'function') {
+				callback(true);
+				}
+			});
+		}
+
+	}

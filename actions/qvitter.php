@@ -5,7 +5,7 @@
   ·                                                                             ·
   ·                             Q V I T T E R                                   ·
   ·                                                                             ·
-  ·              http://github.com/hannesmannerheim/qvitter                     ·
+  ·                      https://git.gnu.io/h2p/Qvitter                         ·
   ·                                                                             ·
   ·                                                                             ·
   ·                                 <o)                                         ·
@@ -86,7 +86,13 @@ class QvitterAction extends ApiAction
 		$apiroot = common_path('api/', StatusNet::isHTTPS());
 		$attachmentroot = common_path('attachment/', StatusNet::isHTTPS());
 		$instanceurl = common_path('', StatusNet::isHTTPS());
+        $favicon_path = QvitterPlugin::settings("favicon_path");
 
+        // user's browser's language setting
+        $user_browser_language = 'en'; // use english if we can't find the browser language
+        if(isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
+            $user_browser_language = substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, 2);
+            }
 
 
 		common_set_returnto(''); // forget this
@@ -103,6 +109,8 @@ class QvitterAction extends ApiAction
 				}
 			}
 
+
+
 		?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
 		"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 		<html xmlns="http://www.w3.org/1999/xhtml">
@@ -112,7 +120,26 @@ class QvitterAction extends ApiAction
 				<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">
 				<link rel="stylesheet" type="text/css" href="<?php print $qvitterpath; ?>css/qvitter.css?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/css/qvitter.css')); ?>" />
 				<link rel="stylesheet" type="text/css" href="<?php print $qvitterpath; ?>css/jquery.minicolors.css" />
-				<link rel="shortcut icon" type="image/x-icon" href="<?php print $qvitterpath; ?><?php print QvitterPlugin::settings("favicon"); ?>">
+                <link rel="apple-touch-icon" sizes="57x57" href="<?php print $favicon_path ?>apple-touch-icon-57x57.png">
+                <link rel="apple-touch-icon" sizes="60x60" href="<?php print $favicon_path ?>apple-touch-icon-60x60.png">
+                <link rel="apple-touch-icon" sizes="72x72" href="<?php print $favicon_path ?>apple-touch-icon-72x72.png">
+                <link rel="apple-touch-icon" sizes="76x76" href="<?php print $favicon_path ?>apple-touch-icon-76x76.png">
+                <link rel="apple-touch-icon" sizes="114x114" href="<?php print $favicon_path ?>apple-touch-icon-114x114.png">
+                <link rel="apple-touch-icon" sizes="120x120" href="<?php print $favicon_path ?>apple-touch-icon-120x120.png">
+                <link rel="apple-touch-icon" sizes="144x144" href="<?php print $favicon_path ?>apple-touch-icon-144x144.png">
+                <link rel="apple-touch-icon" sizes="152x152" href="<?php print $favicon_path ?>apple-touch-icon-152x152.png">
+                <link rel="apple-touch-icon" sizes="180x180" href="<?php print $favicon_path ?>apple-touch-icon-180x180.png">
+                <link rel="icon" type="image/png" href="<?php print $favicon_path ?>favicon-16x16.png" sizes="16x16">
+                <link rel="icon" type="image/png" href="<?php print $favicon_path ?>favicon-32x32.png" sizes="32x32">
+                <link rel="icon" type="image/png" href="<?php print $favicon_path ?>android-chrome-192x192.png" sizes="192x192">
+                <link rel="icon" type="image/png" href="<?php print $favicon_path ?>favicon-96x96.png" sizes="96x96">
+                <link rel="manifest" href="<?php print $favicon_path ?>manifest.json">
+                <link rel="mask-icon" href="<?php print $favicon_path ?>safari-pinned-tab.svg" color="#a22430">
+                <meta name="apple-mobile-web-app-title" content="<?php print $sitetitle; ?>">
+                <meta name="application-name" content="<?php print $sitetitle; ?>">
+                <meta name="msapplication-TileColor" content="#da532c">
+                <meta name="msapplication-TileImage" content="<?php print $favicon_path ?>mstile-144x144.png">
+                <meta name="theme-color" content="#ffffff">
 				<?php
 
 				// if qvitter is a webapp and this is a users url we add feeds
@@ -131,6 +158,17 @@ class QvitterAction extends ApiAction
 							print '				<link title="FOAF for '.$nickname.'" type="application/rdf+xml" href="'.$instanceurl.$nickname.'/foaf" rel="meta">'."\n";
 							print '				<link href="'.$instanceurl.$nickname.'/microsummary" rel="microsummary">'."\n";
 
+                            // rel="me" for the IndieWeb audience
+                            $relMes = array(
+                                ['href' => $user->getProfile()->getHomepage(),
+                                 'text' => _('Homepage'),
+                                 'image' => null],
+                            );
+                            Event::handle('OtherAccountProfiles', array($user->getProfile(), &$relMes));
+							foreach ($relMes as $relMe) {
+                                print '				<link href="'.htmlspecialchars($relMe['href']).'" title="'.$relMe['text'].'" rel="me" />'."\n";
+                            }
+
 							// maybe openid
 							if (array_key_exists('OpenID', StatusNet::getActivePlugins())) {
 								print '				<link rel="openid2.provider" href="'.common_local_url('openidserver').'"/>'."\n";
@@ -146,15 +184,18 @@ class QvitterAction extends ApiAction
 					if(stristr($group_id_or_name,'/id')) {
 						$group_id_or_name = substr($group_id_or_name, 0, strpos($group_id_or_name,'/id'));
 						$group = User_group::getKV('id', $group_id_or_name);
-						$group_name = $group->nickname;
-						$group_id = $group_id_or_name;
-						}
-					else {
+                        if($group instanceof User_group) {
+                            $group_name = $group->nickname;
+    						$group_id = $group_id_or_name;
+                        }
+					} else {
 						$group = Local_group::getKV('nickname', $group_id_or_name);
-						$group_id = $group->group_id;
-						$group_name = $group_id_or_name;
-						}
-					if(preg_match("/^[a-zA-Z0-9]+$/", $group_id_or_name) == 1) {
+                        if($group instanceof Local_group) {
+                            $group_id = $group->group_id;
+    						$group_name = $group_id_or_name;
+                        }
+					}
+					if(preg_match("/^[a-zA-Z0-9]+$/", $group_id_or_name) == 1 && isset($group_name) && isset($group_id)) {
                 ?>
 
 				<link rel="alternate" href="<?php echo htmlspecialchars(common_local_url('ApiTimelineGroup', array('id'=>$group_id, 'format'=>'as'))); ?>" type="application/stream+json" title="Notice feed for '<?php echo htmlspecialchars($group_name); ?>' group (Activity Streams JSON)" />
@@ -166,6 +207,74 @@ class QvitterAction extends ApiAction
 						}
 					}
 
+                // oembed discovery for local notices, and twitter cards
+                if(substr($_SERVER['REQUEST_URI'],0,8) == '/notice/'
+                && $this->arg('notice')
+                && array_key_exists('Oembed', StatusNet::getActivePlugins())) {
+                    $notice = Notice::getKV('id', $this->arg('notice'));
+
+                    if($notice instanceof Notice) {
+                        $profile = $notice->getProfile();
+                        if ($notice->isLocal() && $profile instanceof Profile) {
+
+                            // maybe get thumbnail url
+                            $embed_thumbnail_url = false;
+                            $attachments = $notice->attachments();
+                            if (!empty($attachments)) {
+                                foreach ($attachments as $attachment) {
+                    				if(is_object($attachment)) {
+                                        try {
+                                            $thumb = $attachment->getThumbnail();
+                    					} catch (ServerException $e) {
+                                            //
+                                        }
+                                        if(!empty($thumb) && method_exists('File_thumbnail','url')) {
+                                            try {
+                                                $embed_thumbnail_url = File_thumbnail::url($thumb->filename);
+                                                break; // only first one
+                                            } catch (ClientException $e) {
+                                                //
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            try {
+                                $notice_url = $notice->getUrl();
+                                print '<link title="oEmbed" href="'.common_local_url('apiqvitteroembednotice', array('id' => $notice->id, 'format'=>'json')).'?url='.urlencode($notice_url).'" type="application/json+oembed" rel="alternate">'."\n";
+                                print '<link title="oEmbed" href="'.common_local_url('apiqvitteroembednotice', array('id' => $notice->id, 'format'=>'xml')).'?url='.urlencode($notice_url).'" type="application/xml+oembed" rel="alternate">'."\n";
+                            } catch (Exception $e) {
+                                //
+                            }
+
+                            // single notice feeds
+                            try {
+                                $single_notice_json = common_local_url('ApiStatusesShow', array( 'id' => $notice->getID(),'format' => 'json'));
+                                $single_notice_atom = common_local_url('ApiStatusesShow', array( 'id' => $notice->getID(),'format' => 'atom'));
+                                print '<link title="Single notice (JSON)" href="'.$single_notice_json.'" type="application/stream+json" rel="alternate">'."\n";
+                                print '<link title="Single notice (Atom)" href="'.$single_notice_atom.'" type="application/atom+xml" rel="alternate">'."\n";
+                            } catch (Exception $e) {
+                                //
+                            }
+
+                            // twitter cards
+                            print '<meta name="twitter:card" content="summary" />'."\n";
+                            print '<meta name="twitter:title" content="'.htmlspecialchars($profile->fullname).' (@'.$profile->nickname.')" />'."\n";
+                            print '<meta name="twitter:description" content="'.htmlspecialchars($notice->content).'" />'."\n";
+                            if($embed_thumbnail_url) {
+                                print '<meta name="twitter:image" content="'.$embed_thumbnail_url.'" />'."\n";
+                            }
+
+                            // opengraph
+                            print '<meta property="og:description" content="'.htmlspecialchars($notice->content).'" />'."\n";
+                            print '<meta property="og:site_name" content="'.$sitetitle.'" />'."\n";
+                            if($embed_thumbnail_url) {
+                                print '<meta property="og:image" content="'.$embed_thumbnail_url.'" />'."\n";
+                            }
+                        }
+                    }
+                }
 
 
 				?>
@@ -194,17 +303,25 @@ class QvitterAction extends ApiAction
 					for the JavaScript code in this page.
 					*/
 
-					window.defaultAvatarStreamSize = <?php print json_encode(Avatar::defaultImage(AVATAR_STREAM_SIZE)) ?>;
+                    window.usersLanguageCode = <?php print json_encode($user_browser_language) ?>;
+                    window.usersLanguageNameInEnglish = <?php print json_encode(Locale::getDisplayLanguage($user_browser_language, 'en')) ?>;
+                    window.englishLanguageData = <?php print file_get_contents(QVITTERDIR.'/locale/en.json'); ?>;
+                    window.defaultAvatarStreamSize = <?php print json_encode(Avatar::defaultImage(AVATAR_STREAM_SIZE)) ?>;
+                    window.defaultAvatarProfileSize = <?php print json_encode(Avatar::defaultImage(AVATAR_PROFILE_SIZE)) ?>;
 					window.textLimit = <?php print json_encode((int)common_config('site','textlimit')) ?>;
 					window.registrationsClosed = <?php print json_encode($registrationsclosed) ?>;
 					window.thisSiteThinksItIsHttpButIsActuallyHttps = <?php
 
-						if(isset($_SERVER['HTTPS'])
+                        // this is due to a crazy setup at quitter.se, sorry about that
+                        $siteSSL = common_config('site', 'ssl');
+                        if(isset($_SERVER['HTTPS'])
 						&& $_SERVER['HTTPS'] != 'off'
-						&& substr($instanceurl,0,7) == 'http://') {
-							print 'true';
+						&& $siteSSL == 'never' ) {
+                            $this_site_thinks_it_is_http_but_is_actually_https = true;
+                            print 'true';
 							}
 						else {
+                            $this_site_thinks_it_is_http_but_is_actually_https = false;
 							print 'false';
 							}
 
@@ -218,7 +335,15 @@ class QvitterAction extends ApiAction
 
 					?>;
 					window.timeBetweenPolling = <?php print QvitterPlugin::settings("timebetweenpolling"); ?>;
-					window.apiRoot = '<?php print common_path("api/", StatusNet::isHTTPS()); ?>';
+					window.apiRoot = <?php
+
+                        $api_root = common_path("api/", StatusNet::isHTTPS());
+                        if($this_site_thinks_it_is_http_but_is_actually_https) {
+                            $api_root = str_replace('http://','https://',$api_root);
+                            }
+                        print '\''.$api_root.'\'';
+
+                    ?>;
 					window.fullUrlToThisQvitterApp = '<?php print $qvitterpath; ?>';
 					window.siteRootDomain = '<?php print $siterootdomain; ?>';
 					window.siteInstanceURL = '<?php print $instanceurl; ?>';
@@ -236,6 +361,45 @@ class QvitterAction extends ApiAction
 					window.siteLicenseTitle = '<?php print common_config('license', 'title'); ?>';
 					window.siteLicenseURL = '<?php print common_config('license', 'url'); ?>';
 					window.customTermsOfUse = <?php print json_encode(QvitterPlugin::settings("customtermsofuse")); ?>;
+                    window.siteLocalOnlyDefaultPath = <?php print (common_config('public', 'localonly') ? 'true' : 'false'); ?>;
+                    <?php
+
+                        // Get all topics in Qvitter's namespace in Profile_prefs
+                        if($logged_in_user) {
+
+                            try {
+                                $qvitter_profile_prefs = Profile_prefs::getNamespace(Profile::current(),'qvitter');
+                            } catch (Exception $e) {
+                                $qvitter_profile_prefs = array();
+                            }
+
+                            if(count($qvitter_profile_prefs)>0) {
+                                $topic_data = new stdClass();
+                                foreach($qvitter_profile_prefs as $pref) {
+                                    $topic_data->{$pref->topic} = $pref->data;
+                            		}
+                                print 'window.qvitterProfilePrefs = '.json_encode($topic_data).';';
+                                }
+                            else {
+                                print 'window.qvitterProfilePrefs = false;';
+                                }
+                            }
+
+                        // keyboard shortcuts can be disabled
+                        $disable_keyboard_shortcuts = false;
+                        if($logged_in_user) {
+                            try {
+                                $disable_keyboard_shortcuts = Profile_prefs::getData($logged_in_user->getProfile(), 'qvitter', 'disable_keyboard_shortcuts');
+                                if($disable_keyboard_shortcuts == '1' || $disable_keyboard_shortcuts == 1) {
+                                    $disable_keyboard_shortcuts = true;
+                                }
+                            } catch (Exception $e) {
+                                //
+                                }
+                            }
+                        print 'window.disableKeyboardShortcuts = '.var_export($disable_keyboard_shortcuts, true).';';
+
+                    ?>
 
 					// available language files and their last update time
 					window.availableLanguages = {<?php
@@ -258,11 +422,12 @@ class QvitterAction extends ApiAction
 							}
 
 						// also make an array with all language names, to use for generating menu
-						$languagecodesandnames[$lancode]['english_name'] = Locale::getDisplayLanguage($lancode, 'en');
-						$languagecodesandnames[$lancode]['name'] = Locale::getDisplayLanguage($lancode, $lancode);
-						if(Locale::getDisplayRegion($lancode, $lancode)) {
-							$languagecodesandnames[$lancode]['name'] .= ' ('.Locale::getDisplayRegion($lancode, $lancode).')'.$rtl_or_ltr_special_char;
-							}
+						$languagecodesandnames[$lancode]['english_name'] = Locale::getDisplayName($lancode, 'en');
+						$languagecodesandnames[$lancode]['name'] = Locale::getDisplayName($lancode, $lancode);
+                        $languagecodesandnames[$lancode]['tooltip'] = $languagecodesandnames[$lancode]['name'].' – '.$languagecodesandnames[$lancode]['english_name'];
+                        if($languagecodesandnames[$lancode]['name'] == $languagecodesandnames[$lancode]['english_name']) {
+                            $languagecodesandnames[$lancode]['tooltip'] = $languagecodesandnames[$lancode]['english_name'];
+                        }
 
 						// ahorita meme only on quitter.es
 						if($lancode == 'es_ahorita') {
@@ -290,40 +455,87 @@ class QvitterAction extends ApiAction
 
 				?>
 			</head>
-			<body style="background-color:<?php print QvitterPlugin::settings("defaultbackgroundcolor"); ?>">
-				<input id="upload-image-input" class="upload-image-input" type="file" name="upload-image-input" accept="image/*">
+			<body class="<?php
+
+            // rights as body classes
+            if($logged_in_user) {
+                if($logged_in_user_obj['rights']['silence']){
+                    print 'has-right-to-silence';
+                    }
+                if($logged_in_user_obj['rights']['sandbox']){
+                    print ' has-right-to-sandbox';
+                    }
+                }
+
+            ?>" style="background-color:<?php print QvitterPlugin::settings("defaultbackgroundcolor"); ?>">
+                <?php
+
+                // add an accessibility toggle link to switch to standard UI, if we're logged in
+                if($logged_in_user) {
+                    print '<a id="accessibility-toggle-link" href="#"></a>';
+                    }
+
+                ?>
+				<input id="upload-image-input" class="upload-image-input" type="file" name="upload-image-input">
 				<div class="topbar">
-					<a href="<?php print $instanceurl; ?>"><div id="logo"></div></a>
-					<a id="settingslink">
-						<div class="dropdown-toggle">
-							<div class="nav-session"></div>
-						</div>
-					</a>
-					<div id="top-compose" class="hidden"></div>
+					<a href="<?php
+
+                        // if we're logged in, the logo links to the home stream
+                        // if logged out it links to the site's public stream
+                        if($logged_in_user) {
+                            print $instanceurl.$logged_in_user_nickname.'/all';
+                            }
+                        else {
+                            print $instanceurl.'main/public';
+                        }
+
+                    ?>"><div id="logo"></div></a><?php
+
+                    // menu for logged in users
+                    if($logged_in_user) { ?>
+    					<a id="settingslink">
+    						<div class="dropdown-toggle">
+    							<div class="nav-session" style="background-image:url('<?php print htmlspecialchars($logged_in_user_obj['profile_image_url_profile_size']) ?>')"></div>
+    						</div>
+    					</a><?php
+                        }
+
+                    ?><div id="top-compose" class="hidden"></div>
 					<ul class="quitter-settings dropdown-menu">
 						<li class="dropdown-caret right">
 							<span class="caret-outer"></span>
 							<span class="caret-inner"></span>
 						</li>
-						<li class="fullwidth"><a id="logout"></a></li>
+						<li class="fullwidth"><a id="top-menu-profile-link" class="no-hover-card" href="<?php print $instanceurl.$logged_in_user_obj['screen_name']; ?>"><div id="top-menu-profile-link-fullname"><?php print htmlspecialchars($logged_in_user_obj['name']); ?></div><div id="top-menu-profile-link-view-profile"></div></a></li>
 						<li class="fullwidth dropdown-divider"></li>
-						<li class="fullwidth"><a id="edit-profile-header-link"></a></li>
-						<li class="fullwidth"><a id="settings" href="<?php print $instanceurl; ?>settings/profile" donthijack></a></li>
-						<li class="fullwidth"><a id="faq-link"></a></li>
-                        <li class="fullwidth"><a id="shortcuts-link"></a></li>
-						<?php if (common_config('invite', 'enabled') && !common_config('site', 'closed')) { ?>
+                        <li class="fullwidth"><a id="faq-link"></a></li>
+                        <li class="fullwidth"><a id="tou-link"></a></li>
+                        <?php
+
+                        if($disable_keyboard_shortcuts === true)  {
+                            print '<li class="fullwidth"><a id="shortcuts-link" class="disabled" href="'.$instanceurl.'settings/qvitter"></a></li>';
+					        }
+                        else {
+                            print '<li class="fullwidth"><a id="shortcuts-link"></a></li>';
+                            }
+
+                        if (common_config('invite', 'enabled') && !common_config('site', 'closed')) { ?>
 							<li class="fullwidth"><a id="invite-link" href="<?php print $instanceurl; ?>main/invite"></a></li>
 						<?php } ?>
 						<li class="fullwidth"><a id="classic-link"></a></li>
+						<li class="fullwidth dropdown-divider"></li>
+						<li class="fullwidth"><a id="logout"></a></li>
 						<li class="fullwidth language dropdown-divider"></li>
 						<?php
 
 						// languages
 						foreach($languagecodesandnames as $lancode=>$lan) {
-							print '<li class="language"><a class="language-link" title="'.$lan['english_name'].'" data-lang-code="'.$lancode.'">'.$lan['name'].'</a></li>';
+							print '<li class="language"><a class="language-link" data-tooltip="'.$lan['tooltip'].'" data-lang-code="'.$lancode.'">'.$lan['name'].'</a></li>';
 							}
 
 						?>
+                        <li class="fullwidth language dropdown-divider"></li>
+                        <li class="fullwidth"><a href="https://git.gnu.io/h2p/Qvitter/tree/master/locale" target="_blank" id="add-edit-language-link"></a></li>
 					</ul>
 					<div class="global-nav">
 						<div class="global-nav-inner">
@@ -352,7 +564,7 @@ class QvitterAction extends ApiAction
 
 											// languages
 											foreach($languagecodesandnames as $lancode=>$lan) {
-												print '<li><a class="language-link" title="'.$lan['english_name'].'" data-lang-code="'.$lancode.'">'.$lan['name'].'</a></li>';
+												print '<li><a class="language-link" data-tooltip="'.$lan['english_name'].'" data-lang-code="'.$lancode.'">'.$lan['name'].'</a></li>';
 												}
 
 											?>
@@ -363,6 +575,7 @@ class QvitterAction extends ApiAction
 						</div>
 					</div>
 				</div>
+                <div id="no-js-error">Please enable javascript to use this site.<script>var element = document.getElementById('no-js-error'); element.parentNode.removeChild(element);</script></div>
 				<div id="page-container">
 					<?php
 
@@ -371,111 +584,156 @@ class QvitterAction extends ApiAction
 						print '<div id="site-notice">'.common_config('site', 'notice').'</div>';
 						}
 
-					?><div class="front-welcome-text <?php if ($registrationsclosed) { print 'registrations-closed'; } ?>">
-					</div>
-					<div id="user-container" style="display:none;">
-						<div id="login-content">
-							<form id="form_login" class="form_settings" action="<?php print common_local_url('qvitterlogin'); ?>" method="post">
-								<div id="username-container">
-									<input id="nickname" name="nickname" type="text" value="<?php print $logged_in_user_nickname ?>" tabindex="1" />
-								</div>
-								<table class="password-signin"><tbody><tr>
-									<td class="flex-table-primary">
-										<div class="placeholding-input">
-											<input id="password" name="password" type="password" tabindex="2" value="" />
-										</div>
-									</td>
-									<td class="flex-table-secondary">
-										<button class="submit" type="submit" id="submit-login" tabindex="4"></button>
-									</td>
-								</tr></tbody></table>
-								<div id="remember-forgot">
-									<input type="checkbox" id="rememberme" name="rememberme" value="yes" tabindex="3" checked="checked"> <span id="rememberme_label"></span> · <a id="forgot-password" href="<?php print $instanceurl ?>main/recoverpassword" ></a>
-									<input type="hidden" id="token" name="token" value="<?php print common_session_token(); ?>">
-									<?php
+                    // welcome text, login and register container if logged out
+                    if($logged_in_user === null) { ?>
+                        <div class="front-welcome-text <?php if ($registrationsclosed) { print 'registrations-closed'; } ?>"></div>
+                        <div id="login-register-container">
+    						<div id="login-content">
+    							<form id="form_login" class="form_settings" action="<?php print common_local_url('qvitterlogin'); ?>" method="post">
+    								<div id="username-container">
+    									<input id="nickname" name="nickname" type="text" value="<?php print $logged_in_user_nickname ?>" tabindex="1" />
+    								</div>
+    								<table class="password-signin"><tbody><tr>
+    									<td class="flex-table-primary">
+    										<div class="placeholding-input">
+    											<input id="password" name="password" type="password" tabindex="2" value="" />
+    										</div>
+    									</td>
+    									<td class="flex-table-secondary">
+    										<button class="submit" type="submit" id="submit-login" tabindex="4"></button>
+    									</td>
+    								</tr></tbody></table>
+    								<div id="remember-forgot">
+    									<input type="checkbox" id="rememberme" name="rememberme" value="yes" tabindex="3" checked="checked"> <span id="rememberme_label"></span> · <a id="forgot-password" href="<?php print $instanceurl ?>main/recoverpassword" ></a>
+    									<input type="hidden" id="token" name="token" value="<?php print common_session_token(); ?>">
+    									<?php
 
-									if (array_key_exists('OpenID', StatusNet::getActivePlugins())) {
-										print '<a href="'.$instanceurl.'main/openid" id="openid-login" title="OpenID" donthijack>OpenID</a>';
-										}
+    									if (array_key_exists('OpenID', StatusNet::getActivePlugins())) {
+    										print '<a href="'.$instanceurl.'main/openid" id="openid-login" title="OpenID" donthijack>OpenID</a>';
+    										}
 
-									?>
-								</div>
-							</form>
-						</div>
-						<?php
-						if($registrationsclosed === false && $client_ip_is_blocked === false) {
-						?><div class="front-signup">
-							<h2></h2>
-							<div class="signup-input-container"><input placeholder="" type="text" name="user[name]" autocomplete="off" class="text-input" id="signup-user-name"></div>
-							<div class="signup-input-container"><input placeholder="" type="text" name="user[email]" autocomplete="off" id="signup-user-email"></div>
-							<div class="signup-input-container"><input placeholder="" type="password" name="user[user_password]" class="text-input" id="signup-user-password"></div>
-							<button id="signup-btn-step1" class="signup-btn" type="submit"></button>
-							<div id="other-servers-link"></div>
-						</div><?php } ?>
-						<div id="user-header">
-							<div id="mini-edit-profile-button"></div>
-							<div class="profile-header-inner-overlay"></div>
-							<div id="user-avatar-container"><img id="user-avatar" src="" /></div>
-							<div id="user-name"></div>
-							<div id="user-screen-name"></div>
-						</div>
-						<ul id="user-body">
-							<li><a id="user-queets"><span class="label"></span><strong></strong></a></li>
-							<li><a id="user-following"><span class="label"></span><strong></strong></a></li>
-							<li><a id="user-groups"><span class="label"></span><strong></strong></a></li>
-						</ul>
-						<div id="user-footer">
-							<div id="user-footer-inner">
-								<div id="queet-box" class="queet-box queet-box-syntax" data-start-text=""></div>
-								<div class="syntax-middle"></div>
-								<div class="syntax-two" contenteditable="true"></div>
-								<div class="mentions-suggestions"></div>
-								<div class="queet-toolbar">
-									<div class="queet-box-extras">
-										<button class="upload-image"></button>
-										<button class="shorten disabled">URL</button>
-									</div>
-									<div class="queet-button">
-										<span class="queet-counter"></span>
-										<button></button>
-									</div>
-								</div>
-							</div>
-						</div>
-						<div class="menu-container">
-							<a class="stream-selection friends-timeline" data-stream-header="" data-stream-name="statuses/friends_timeline.json"><i class="chev-right"></i></a>
-							<a class="stream-selection notifications" data-stream-header="" data-stream-name="qvitter/statuses/notifications.json"><span id="unseen-notifications"></span><i class="chev-right"></i></a>
-							<a class="stream-selection mentions" data-stream-header="" data-stream-name="statuses/mentions.json"><i class="chev-right"></i></a>
-							<a class="stream-selection my-timeline" data-stream-header="@statuses/user_timeline.json" data-stream-name="statuses/user_timeline.json"><i class="chev-right"></i></a>
-							<a class="stream-selection favorites" data-stream-header="" data-stream-name="favorites.json"><i class="chev-right"></i></a>
-							<a href="<?php print $instanceurl ?>" class="stream-selection public-timeline" data-stream-header="" data-stream-name="statuses/public_timeline.json"><i class="chev-right"></i></a>
-							<a href="<?php print $instanceurl ?>main/all" class="stream-selection public-and-external-timeline" data-stream-header="" data-stream-name="statuses/public_and_external_timeline.json"><i class="chev-right"></i></a>
-						</div>
-						<div class="menu-container" id="history-container"></div>
-						<div id="qvitter-notice"><?php print common_config('site', 'qvitternotice'); ?></div>
-					</div>
-					<div id="feed">
+    									?>
+    								</div>
+    							</form>
+    						</div>
+    						<?php
+    						if($registrationsclosed === false && $client_ip_is_blocked === false) {
+    						?><div class="front-signup">
+    							<h2></h2>
+    							<div class="signup-input-container"><input placeholder="" type="text" name="user[name]" autocomplete="off" class="text-input" id="signup-user-name"></div>
+    							<div class="signup-input-container"><input placeholder="" type="text" name="user[email]" autocomplete="off" id="signup-user-email"></div>
+    							<div class="signup-input-container"><input placeholder="" type="password" name="user[user_password]" class="text-input" id="signup-user-password"></div>
+    							<button id="signup-btn-step1" class="signup-btn" type="submit"></button>
+    						</div>
+                            <div id="other-servers-link"></div><?php }
+                            ?><div id="qvitter-notice-logged-out"><?php print common_config('site', 'qvitternoticeloggedout'); ?></div><?php
+
+                            // event for other plugins to add html to the logged in sidebar
+                            Event::handle('QvitterEndShowSidebarLoggedOut', array($this));
+
+                            ?></div><?php
+                        }
+
+                    // box containing the logged in users queet count and compose form
+                    if($logged_in_user) { ?>
+                        <div id="user-container" style="display:none;">
+    						<div id="user-header" style="background-image:url('<?php print htmlspecialchars($logged_in_user_obj['cover_photo']) ?>')">
+    							<div id="mini-logged-in-user-cog-wheel"></div>
+    							<div class="profile-header-inner-overlay"></div>
+    							<div id="user-avatar-container"><img id="user-avatar" src="<?php print htmlspecialchars($logged_in_user_obj['profile_image_url_profile_size']) ?>" /></div>
+    							<div id="user-name"><?php print htmlspecialchars($logged_in_user_obj['name']) ?></div>
+    							<div id="user-screen-name"><?php print htmlspecialchars($logged_in_user_obj['screen_name']) ?></div>
+    						</div>
+    						<ul id="user-body">
+    							<li><a href="<?php print $instanceurl.$logged_in_user->nickname ?>" id="user-queets"><span class="label"></span><strong><?php print $logged_in_user_obj['statuses_count'] ?></strong></a></li>
+    							<li><a href="<?php print $instanceurl.$logged_in_user->nickname ?>/subscriptions" id="user-following"><span class="label"></span><strong><?php print $logged_in_user_obj['friends_count'] ?></strong></a></li>
+    							<li><a href="<?php print $instanceurl.$logged_in_user->nickname ?>/groups" id="user-groups"><span class="label"></span><strong><?php print $logged_in_user_obj['groups_count'] ?></strong></a></li>
+    						</ul>
+    						<div id="user-footer">
+    							<div id="user-footer-inner">
+    								<div id="queet-box" class="queet-box queet-box-syntax" data-start-text=""></div>
+    								<div class="syntax-middle"></div>
+    								<div class="syntax-two" contenteditable="true"></div>
+    								<div class="mentions-suggestions"></div>
+    								<div class="queet-toolbar">
+    									<div class="queet-box-extras">
+    										<button class="upload-image"></button>
+    										<button class="shorten disabled">URL</button>
+    									</div>
+    									<div class="queet-button">
+    										<span class="queet-counter"></span>
+    										<button></button>
+    									</div>
+    								</div>
+    							</div>
+    						</div>
+                            <div id="main-menu" class="menu-container"><?php
+
+                                    if($logged_in_user) {
+                                        ?><a href="<?php print $instanceurl.$logged_in_user->nickname ?>/all" class="stream-selection friends-timeline"><i class="chev-right"></i></a>
+            							<a href="<?php print $instanceurl.$logged_in_user->nickname ?>/notifications" class="stream-selection notifications"><span id="unseen-notifications"></span><i class="chev-right"></i></a>
+            							<a href="<?php print $instanceurl.$logged_in_user->nickname ?>" class="stream-selection my-timeline"><i class="chev-right"></i></a>
+            							<a href="<?php print $instanceurl.$logged_in_user->nickname ?>/favorites" class="stream-selection favorites"><i class="chev-right"></i></a>
+            							<a href="<?php print $instanceurl ?>main/public" class="stream-selection public-timeline"><i class="chev-right"></i></a>
+            							<a href="<?php print $instanceurl ?>main/all" class="stream-selection public-and-external-timeline"><i class="chev-right"></i></a>
+                                        <?php
+                                        }
+                                ?>
+        						</div>
+        						<div class="menu-container" id="bookmark-container"></div>
+                                <div class="menu-container" id="history-container"></div>
+                                <div id="clear-history"></div>
+        						<div id="qvitter-notice"><?php print common_config('site', 'qvitternotice'); ?></div><?php
+
+                	            // event for other plugins to add html to the logged in sidebar
+                	            Event::handle('QvitterEndShowSidebarLoggedIn', array($this));
+
+        				        ?></div><?php
+                            } ?>
+
+                    <div id="feed">
 						<div id="feed-header">
 							<div id="feed-header-inner">
-								<h2></h2>
+								<h2>
+                                    <span id="stream-header"></span>
+                                </h2>
 								<div class="reload-stream"></div>
 							</div>
+                            <div id="feed-header-description"></div>
 						</div>
 						<div id="new-queets-bar-container" class="hidden"><div id="new-queets-bar"></div></div>
 						<div id="feed-body"></div>
 					</div>
+                    <div id="hidden-html"><?php
 
+                        // adds temporary support for microformats and linkbacks on the notice page
+                    	if(substr($_SERVER['REQUEST_URI'],0,8) == '/notice/' && $this->arg('notice')) {
+                    		echo '<ol class="notices xoxo">';
+                            if($notice instanceof Notice) {
+                    			$widget = new NoticeListItem($notice, $this);
+                    			$widget->show();
+                    			$this->flush();
+                            }
+                    		echo '</ol>';
+                    	}
+
+                        Event::handle('QvitterHiddenHtml', array($this));
+
+                    ?></div>
 					<div id="footer"><div id="footer-spinner-container"></div></div>
 				</div>
 				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-2.1.4.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery-2.1.4.min.js')); ?>"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-ui-1.10.3.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery-ui-1.10.3.min.js')); ?>"></script>
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery-ui.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery-ui.min.js')); ?>"></script>
 				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery.minicolors.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery.minicolors.min.js')); ?>"></script>
 				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/jquery.jWindowCrop.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/jquery.jWindowCrop.js')); ?>"></script>
 				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/load-image.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/load-image.min.js')); ?>"></script>
-				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/xregexp-all-min-2.0.0.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/xregexp-all-min-2.0.0.js')); ?>"></script>
+				<script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/xregexp-all-3.0.0-pre.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/xregexp-all-3.0.0-pre.js')); ?>"></script>
+                <script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/lz-string.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/lz-string.js')); ?>"></script>
+                <script type="text/javascript" src="<?php print $qvitterpath; ?>js/lib/bowser.min.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/lib/bowser.min.js')); ?>"></script>
 				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/dom-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/dom-functions.js')); ?>"></script>
 				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/misc-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/misc-functions.js')); ?>"></script>
 				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/ajax-functions.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/ajax-functions.js')); ?>"></script>
+                <script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/stream-router.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/stream-router.js')); ?>"></script>
 				<script charset="utf-8" type="text/javascript" src="<?php print $qvitterpath; ?>js/qvitter.js?changed=<?php print date('YmdHis',filemtime(QVITTERDIR.'/js/qvitter.js')); ?>"></script>
 				<?php
 
@@ -516,11 +774,13 @@ class QvitterAction extends ApiAction
 					#user-body #user-following:hover .label,
 					ul.stats a strong,
 					.queet-box-extras button,
-					#openid-login:hover:after {
+					#openid-login:hover:after,
+                    .post-to-group,
+                    .stream-item-header .addressees .reply-to .h-card.not-mentioned-inline {
 						color:/*COLORSTART*/<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>/*COLOREND*/;
 						}
 					#unseen-notifications,
-					.stream-item.notification .not-seen,
+					.stream-item.notification.not-seen > .queet::before,
 					#top-compose,
 					#logo,
 					.queet-toolbar button,
@@ -534,7 +794,8 @@ class QvitterAction extends ApiAction
 					.save-profile-button,
 					.crop-and-save-button,
 					.topbar .global-nav.show-logo:before,
-					.topbar .global-nav.pulse-logo:before {
+					.topbar .global-nav.pulse-logo:before,
+                    .dropdown-menu li:not(.dropdown-caret) a:hover {
 						background-color:/*BACKGROUNDCOLORSTART*/<?php print QvitterPlugin::settings("defaultlinkcolor"); ?>/*BACKGROUNDCOLOREND*/;
 						}
 					.queet-box-syntax[contenteditable="true"]:focus,
@@ -552,7 +813,12 @@ class QvitterAction extends ApiAction
 					.inline-reply-queetbox,
 					span.inline-reply-caret,
 				    .stream-item.expanded .stream-item.first-visible-after-parent,
-					#popup-faq #faq-container p.indent {
+					#popup-faq #faq-container p.indent,
+                    .post-to-group,
+                    .quoted-notice:hover,
+                    .oembed-item:hover,
+                    .stream-item:hover:not(.expanded) .quoted-notice:hover,
+                    .stream-item:hover:not(.expanded) .oembed-item:hover {
 						border-color:/*LIGHTERBORDERCOLORSTART*/rgb(155,206,224)/*LIGHTERBORDERCOLOREND*/;
 						}
 					span.inline-reply-caret .caret-inner {

@@ -38,6 +38,37 @@
   · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · · */
 
 
+/* ·
+   ·
+   ·   Trigger click on <input type="file"> elements
+   ·
+   ·   @param inputFile: jQuery element to trigger click on
+   ·
+   · · · · · · · · · */
+
+function triggerClickOnInputFile(inputFile) {
+	if(typeof bowser != 'undefined') {
+		var bowserIntVersion = parseInt(bowser.version,10);
+		if(typeof bowser.chrome != 'undefined' && bowser.chrome === true && bowserIntVersion < 53
+		|| typeof bowser.opera != 'undefined' && bowser.opera === true && bowserIntVersion < 39
+		|| typeof bowser.safari != 'undefined' && bowser.safari === true && bowserIntVersion < 9) {
+			var evt = document.createEvent("HTMLEvents");
+			evt.initEvent("click", true, true);
+			inputFile[0].dispatchEvent(evt);
+			console.log('triggering click on on input file element with the old trigger hack for older browsers...');
+			}
+		else {
+			inputFile.trigger('click');
+			console.log('regular click triggered on input file element');
+			}
+		}
+	else {
+		inputFile.trigger('click');
+		console.log('no bowser object found: regular click triggered on input file element');
+		}
+	console.log(bowser);
+	}
+
 
 /* ·
    ·
@@ -51,35 +82,37 @@
 
 function localStorageObjectCache_STORE(name, unique_id, object) {
 
-	if(localStorageIsEnabled()) {
+	if(localStorageIsEnabled() === false) {
+		return false;
+		}
 
-		if(object === false || object.length < 1) {
-			// false or an empty object means we remove this entry
-			if(typeof localStorage[name + '-' + unique_id] != 'undefined' && localStorage[name + '-' + unique_id] !== null) {
-				delete localStorage[name + '-' + unique_id];
-				}
+	name = localStorageMaybeAppendIdToKey(name);
+
+	if(object === false || object === null || object.length < 1) {
+		// false or an empty object means we remove this entry
+		if(typeof localStorage[name + '-' + unique_id] != 'undefined' && localStorage[name + '-' + unique_id] !== null) {
+			delete localStorage[name + '-' + unique_id];
+			}
+		return false;
+		}
+
+	var dataToSave = {};
+	dataToSave.modified = Date.now();
+	dataToSave.cdata = LZString.compressToUTF16(JSON.stringify(object));
+
+	try {
+		localStorage.setItem(name + '-' + unique_id, JSON.stringify(dataToSave));
+		}
+	catch (e) {
+		if (e.name == 'QUOTA_EXCEEDED_ERR' || e.name == 'NS_ERROR_DOM_QUOTA_REACHED' || e.name == 'QuotaExceededError' || e.name == 'W3CException_DOM_QUOTA_EXCEEDED_ERR') {
+
+			removeOldestLocalStorageEntries(function(){
+				localStorageObjectCache_STORE(name, unique_id, object);
+				});
+
 			}
 		else {
-
-			var dataToSave = {};
-			dataToSave.modified = Date.now();
-			dataToSave.data = object;
-
-			try {
-				localStorage.setItem(name + '-' + unique_id, JSON.stringify(dataToSave));
-				}
-			catch (e) {
-				if (e.name == 'QUOTA_EXCEEDED_ERR' || e.name == 'NS_ERROR_DOM_QUOTA_REACHED' || e.name == 'QuotaExceededError' || e.name == 'W3CException_DOM_QUOTA_EXCEEDED_ERR') {
-
-					removeOldestLocalStorageEntries(function(){
-						localStorageObjectCache_STORE(name, unique_id, object);
-						});
-
-					}
-				else {
-					console.log('could not store in localStorage, unknown error');
-					}
-				}
+			console.log('could not store in localStorage, unknown error');
 			}
 		}
 	}
@@ -115,9 +148,15 @@ function removeOldestLocalStorageEntries(callback) {
 			}
 		});
 
-	console.log('removed 100 old localstorage items');
+	console.log('removed ' + i + ' old localstorage items');
 
-	callback();
+	if(i>0) {
+		callback();
+		return true;
+		}
+	else {
+		return false;
+		}
 	}
 
 
@@ -132,26 +171,59 @@ function removeOldestLocalStorageEntries(callback) {
 
 function localStorageObjectCache_GET(name, unique_id) {
 
-	if(localStorageIsEnabled()) {
-		if(typeof localStorage[name + '-' + unique_id] != 'undefined' && localStorage[name + '-' + unique_id] !== null) {
-			var parsedObject = JSON.parse(localStorage[name + '-' + unique_id]);
-			if(typeof parsedObject.modified == 'undefined' || parsedObject.modified === null) {
-				// invalid or old localstorage object found, check the whole localstorage!
-				checkLocalStorage();
-				return false;
-				}
-			else {
-				return parsedObject.data;
-				}
+	if(localStorageIsEnabled() === false) {
+		return false;
+		}
+
+	name = localStorageMaybeAppendIdToKey(name);
+
+	if(typeof localStorage[name + '-' + unique_id] == 'undefined' || localStorage[name + '-' + unique_id] === null) {
+		return false;
+		}
+
+	try {
+		var parsedObject = JSON.parse(localStorage[name + '-' + unique_id]);
+		}
+	catch(e) {
+		return false;
+		}
+
+	if(typeof parsedObject.modified == 'undefined' || parsedObject.modified === null) {
+		// invalid or old localstorage object found, check the whole localstorage!
+		checkLocalStorage();
+		return false;
+		}
+	else {
+		try {
+			var decompressedAndParsed = JSON.parse(LZString.decompressFromUTF16(parsedObject.cdata));
+			return decompressedAndParsed;
 			}
-		else {
+		catch(e) {
 			return false;
 			}
 		}
+
+	}
+
+
+// to the following data types we add the logged in user's user id,
+// since they contain user specific data (0 for logged out)
+// selectedLanguage is handled differently, since we want to be able to
+// access the logged out user's data if we're logged in
+function localStorageMaybeAppendIdToKey(name) {
+	if(jQuery.inArray(name, ['browsingHistory', 'conversation', 'queetBoxInput', 'streamState']) !== -1) {
+		if(window.loggedIn) {
+			return name + '-' + window.loggedIn.id;
+			}
+		else {
+			return name + '-0' ;
+			}
+		}
 	else {
-		return false;
+		return name;
 		}
 	}
+
 
 function checkLocalStorage() {
 
@@ -164,6 +236,7 @@ function checkLocalStorage() {
 	var dateNow = Date.now()
 	var corrected = 0;
 	var deleted = 0;
+	var compressed = 0;
 	$.each(localStorage, function(k,entry){
 		if(typeof entry == 'string') {
 
@@ -185,7 +258,9 @@ function checkLocalStorage() {
 				'languageData',
 				'fullQueetHtml',
 				'selectedLanguage',
-				'queetBoxInput'
+				'queetBoxInput',
+				'streamState',
+				'languageErrorMessageDiscarded'
 				];
 			var thisDataType = k.substring(0,k.indexOf('-'));
 			if($.inArray(thisDataType, validDataTypes) == -1 || k.indexOf('-') == -1) {
@@ -198,7 +273,7 @@ function checkLocalStorage() {
 			if(typeof entryParsed.modified == 'undefined' || entryParsed.modified === null) {
 				var newEntry = {};
 				newEntry.modified = dateNow - corrected; // we want as unique dates as possible
-				newEntry.data = entryParsed;
+				newEntry.cdata = entryParsed;
 				try {
 					localStorage.setItem(k, JSON.stringify(newEntry));
 					}
@@ -209,12 +284,563 @@ function checkLocalStorage() {
 							});
 						}
 					}
+				entryParsed = newEntry;
 				corrected++;
+				}
+
+			// compress uncompressed data
+			if(typeof entryParsed.data != 'undefined') {
+				// but not if it's not containing any data (some bug may have saved an empty, false or null value)
+				if(entryParsed.data === false || entryParsed.data === null || entryParsed.data.length == 0) {
+					delete localStorage[k];
+					deleted++;
+					return true;
+					}
+				var dataCompressed = LZString.compressToUTF16(JSON.stringify(entryParsed.data));
+				var newCompressedEntry = {};
+				newCompressedEntry.modified = entryParsed.modified;
+				newCompressedEntry.cdata = dataCompressed;
+				localStorage.setItem(k, JSON.stringify(newCompressedEntry));
+				compressed++;
 				}
 			}
 		});
-	console.log(corrected + ' entries corrected, ' + deleted + ' entries deleted');
+	console.log(corrected + ' entries corrected, ' + deleted + ' entries deleted, ' + compressed + ' entries compressed');
 	}
+
+
+/* ·
+   ·
+   ·   Checks if localstorage is availible
+   ·
+   ·   We can't just do if(typeof localStorage.selectedLanguage != 'undefined')
+   ·   because firefox with cookies disabled then freaks out and stops executing js completely
+   ·
+   · · · · · · · · · */
+
+function localStorageIsEnabled() {
+	var mod = 'test';
+	try {
+		localStorage.setItem(mod, mod);
+		localStorage.removeItem(mod);
+		return true;
+		}
+	catch(e) {
+		if (e.name == 'QUOTA_EXCEEDED_ERR' || e.name == 'NS_ERROR_DOM_QUOTA_REACHED' || e.name == 'QuotaExceededError' || e.name == 'W3CException_DOM_QUOTA_EXCEEDED_ERR') {
+
+			// if localstorage is empty but returns a full error, we assume it's disabled (in an ugly way)
+			if(localStorage.length === 0) {
+				return false;
+				}
+
+			var successfulRemoval = removeOldestLocalStorageEntries(function(){
+				return localStorageIsEnabled();
+				});
+			if(successfulRemoval === false) {
+				return false;
+				}
+			}
+		else {
+			return false;
+			}
+		}
+	}
+
+
+
+
+/* ·
+   ·
+   ·  Block/unblock user and do necessary stuff
+   ·
+   · · · · · · · · · */
+
+function blockUser(arg, callback) {
+
+	$('body').click(); // a click somewhere hides any open menus
+
+	// arguments is sent as an object, for easier use with a menu's function-row
+	var userId = arg.userId;
+	var blockButton_jQueryElement = arg.blockButton_jQueryElement;
+
+	display_spinner();
+	APIBlockOrUnblockUser('block', userId, function(data) {
+		remove_spinner();
+
+		// activate the button, if we were passed one
+		if(typeof blockButton_jQueryElement != 'undefined') {
+			blockButton_jQueryElement.removeClass('disabled');
+			}
+
+		if(data && data.statusnet_blocking === true) {
+			// success
+			markUserAsBlockedInDOM(userId, data.following);
+			if(typeof callback == 'function') {
+				callback(blockButton_jQueryElement);
+				}
+			}
+		else {
+			// failed!
+			showErrorMessage(window.sL.failedBlockingUser);
+			}
+		});
+	}
+function unblockUser(arg, callback) {
+
+	$('body').click(); // a click somewhere hides any open menus
+
+	// arguments is sent as an object, for easier use with a menu's function-row
+	var userId = arg.userId;
+	var blockButton_jQueryElement = arg.blockButton_jQueryElement;
+
+	display_spinner();
+	APIBlockOrUnblockUser('unblock', userId, function(data) {
+		remove_spinner();
+
+		// activate the button, if we were passed one
+		if(typeof blockButton_jQueryElement != 'undefined') {
+			blockButton_jQueryElement.removeClass('disabled');
+			}
+
+		if(data && data.statusnet_blocking === false) {
+			// success
+			markUserAsUnblockedInDOM(userId, data.following);
+			if(typeof callback == 'function') {
+				callback(blockButton_jQueryElement);
+				}
+			}
+		else {
+			// failed!
+			showErrorMessage(window.sL.failedUnblockingUser);
+			}
+		});
+	}
+function markUserAsBlockedInDOM(userId, following) {
+
+	// display buttons accordingly
+	$('.qvitter-follow-button[data-follow-user-id="' + userId + '"]').addClass('blocking');
+
+	if(following) {
+		$('.qvitter-follow-button[data-follow-user-id="' + userId + '"]').addClass('following');
+		}
+	else {
+		$('.qvitter-follow-button[data-follow-user-id="' + userId + '"]').removeClass('following');
+		}
+
+	// hide notices from the blocked user
+	$.each($('.stream-item[data-quitter-id-in-stream][data-user-id="' + userId + '"]'),function(){
+		$(this).addClass('profile-blocked-by-me');
+		$(this).children('.queet').attr('data-tooltip',window.sL.thisIsANoticeFromABlockedUser);
+		});
+
+	// add to the window.allBlocking array
+	if (userIsBlocked(userId) === false) {
+    	window.allBlocking.push(userId);
+		}
+	}
+function markUserAsUnblockedInDOM(userId, following) {
+
+	// display buttons accordingly
+	$('.qvitter-follow-button[data-follow-user-id="' + userId + '"]').removeClass('blocking');
+	if(following) {
+		$('.qvitter-follow-button[data-follow-user-id="' + userId + '"]').addClass('following');
+		}
+	else {
+		$('.qvitter-follow-button[data-follow-user-id="' + userId + '"]').removeClass('following');
+		}
+
+	// hide the user from lists of blocked users
+	if(window.currentStreamObject.name == 'user blocks' && window.currentStreamObject.nickname == window.loggedIn.screen_name) {
+		$.each($('.stream-item.user[data-user-id="' + userId + '"]'),function(){
+			slideUpAndRemoveStreamItem($(this));
+			});
+		}
+
+	// unhide notices from the blocked user
+	$.each($('.stream-item[data-quitter-id-in-stream][data-user-id="' + userId + '"]'),function(){
+		$(this).removeClass('profile-blocked-by-me');
+		$(this).children('.queet').removeAttr('data-tooltip');
+		});
+
+	// remove from the window.allBlocking array
+	var existingBlockIndex = window.allBlocking.indexOf(userId);
+	if (existingBlockIndex > -1) {
+    	window.allBlocking.splice(existingBlockIndex, 1);
+		}
+	}
+
+/* ·
+   ·
+   ·  Is this user id blocked?
+   ·
+   · · · · · · · · · */
+
+function userIsBlocked(userId) {
+	var existingBlock = window.allBlocking.indexOf(userId);
+	if (existingBlock > -1) {
+    	return true;
+		}
+	else {
+		return false;
+		}
+	}
+
+/* ·
+   ·
+   ·  Marks all notices from blocked users in an jQuery object as blocked
+   ·
+   · · · · · · · · · */
+
+
+function markAllNoticesFromBlockedUsersAsBlockedInJQueryObject(obj) {
+	$.each(window.allBlocking,function(){
+		obj.find('.stream-item[data-user-id="' + this + '"]').addClass('profile-blocked-by-me');
+		obj.find('.stream-item[data-user-id="' + this + '"]').children('.queet').attr('data-tooltip',window.sL.thisIsANoticeFromABlockedUser);
+		});
+
+	}
+
+/* ·
+   ·
+   ·  Marks all notices from muted users in an jQuery object as muted
+   ·
+   · · · · · · · · · */
+
+function markAllNoticesFromMutedUsersAsMutedInJQueryObject(obj) {
+
+	$.each(obj.find('.stream-item'),function(){
+		if(isUserMuted($(this).attr('data-user-id'))) {
+			$(this).addClass('user-muted');
+			$(this).children('.queet').attr('data-tooltip',window.sL.thisIsANoticeFromAMutedUser);
+			}
+		else {
+			$(this).children('.queet').removeAttr('data-tooltip');
+			$(this).removeClass('user-muted');
+			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·  Marks all profile cards from muted users as muted in DOM
+   ·
+   · · · · · · · · · */
+
+function markAllProfileCardsFromMutedUsersAsMutedInDOM() {
+
+	$.each($('body').find('.profile-header-inner'),function(){
+		if(isUserMuted($(this).attr('data-user-id'))) {
+			$(this).parent('.profile-card').addClass('user-muted');
+			}
+		else {
+			$(this).parent('.profile-card').removeClass('user-muted');
+			}
+		});
+	}
+
+
+
+/* ·
+   ·
+   ·  Function invoked after mute and unmute
+   ·
+   · · · · · · · · · */
+
+function hideOrShowNoticesAfterMuteOrUnmute() {
+	markAllNoticesFromMutedUsersAsMutedInJQueryObject($('#feed-body'));
+	markAllProfileCardsFromMutedUsersAsMutedInDOM();
+	}
+
+/* ·
+   ·
+   ·  Sandbox/unsandbox user and do necessary stuff
+   ·
+   · · · · · · · · · */
+
+function sandboxCreateOrDestroy(arg, callback) {
+
+	$('body').click(); // a click somewhere hides any open menus
+
+	display_spinner();
+	APISandboxCreateOrDestroy(arg.createOrDestroy, arg.userId, function(data) {
+		remove_spinner();
+		if(!data) {
+			// failed!
+			showErrorMessage(window.sL.ERRORfailedSandboxingUser);
+			}
+		});
+	}
+
+/* ·
+   ·
+   ·  Sandbox/unsandbox user and do necessary stuff
+   ·
+   · · · · · · · · · */
+
+function silenceCreateOrDestroy(arg, callback) {
+
+	$('body').click(); // a click somewhere hides any open menus
+
+	display_spinner();
+	APISilenceCreateOrDestroy(arg.createOrDestroy, arg.userId, function(data) {
+		remove_spinner();
+		if(!data) {
+			// failed!
+			showErrorMessage(window.sL.ERRORfailedSilencingUser);
+			}
+		});
+	}
+
+/* ·
+   ·
+   ·   Get the logged in user's menu array
+   ·
+   · · · · · · · · · */
+
+function loggedInUsersMenuArray() {
+	return [
+		{
+			type: 'function',
+			functionName: 'goToEditProfile',
+			label: window.sL.editMyProfile
+			},
+		{
+			type: 'link',
+			href: window.siteInstanceURL + 'settings/profile',
+			label: window.sL.settings
+			},
+		{
+			type:'divider'
+			},
+		{
+			type: 'link',
+			href: window.siteInstanceURL + window.loggedIn.screen_name + '/mutes',
+			label: window.sL.userMuted
+			},
+		{
+			type: 'link',
+			href: window.siteInstanceURL + window.loggedIn.screen_name + '/blocks',
+			label: window.sL.userBlocked
+			}];
+	}
+
+
+/* ·
+   ·
+   ·   Append moderator user actions to menu array
+   ·
+   ·   @param menuArray: array used to build menus in getMenu()
+   ·   @param userID: the user id of the user to act on
+   ·   @param userScreenName: the screen_name/nickname/username of the user to act on
+   ·   @param sandboxed: is the user sandboxed?
+   ·   @param silenced: is the user silenced?
+   ·
+   · · · · · · · · · */
+
+function appendModeratorUserActionsToMenuArray(menuArray,userID,userScreenName,sandboxed,silenced) {
+
+	// not if it's me
+	if(window.loggedIn.id == userID) {
+		return menuArray;
+		}
+
+	if(window.loggedIn !== false && window.loggedIn.rights.sandbox === true) {
+		menuArray.push({type:'divider'});
+		if(sandboxed === true) {
+			menuArray.push({
+				type: 'function',
+				functionName: 'sandboxCreateOrDestroy',
+				functionArguments: {
+					userId: userID,
+					createOrDestroy: 'destroy'
+					},
+				label: window.sL.unSandboxThisUser.replace('{nickname}','@' + userScreenName)
+				});
+			}
+		else {
+			menuArray.push({
+				type: 'function',
+				functionName: 'sandboxCreateOrDestroy',
+				functionArguments: {
+					userId: userID,
+					createOrDestroy: 'create'
+					},
+				label: window.sL.sandboxThisUser.replace('{nickname}','@' + userScreenName)
+				});
+			}
+		}
+	if(window.loggedIn !== false && window.loggedIn.rights.silence === true) {
+		if(silenced === true) {
+			menuArray.push({
+				type: 'function',
+				functionName: 'silenceCreateOrDestroy',
+				functionArguments: {
+					userId: userID,
+					createOrDestroy: 'destroy'
+					},
+				label: window.sL.unSilenceThisUser.replace('{nickname}','@' + userScreenName)
+				});
+			}
+		else {
+			menuArray.push({
+				type: 'function',
+				functionName: 'silenceCreateOrDestroy',
+				functionArguments: {
+					userId: userID,
+					createOrDestroy: 'create'
+					},
+				label: window.sL.silenceThisUser.replace('{nickname}','@' + userScreenName)
+				});
+			}
+		}
+
+	return menuArray;
+	}
+
+
+/* ·
+   ·
+   ·  Updates the times for all queets loaded to DOM
+   ·
+   · · · · · · · · · */
+
+function updateAllQueetsTimes() {
+	$('[data-created-at]').each(function(){
+		// if the element with the data-created-at doesn't have an a-child, we change the html of the element
+		if($(this).children('a').length==0){
+			$(this).html(parseTwitterDate($(this).attr('data-created-at')));
+			}
+		// otherwise the change the child's html
+		else {
+			$(this).children('a').html(parseTwitterDate($(this).attr('data-created-at')));
+			}
+		});
+	}
+
+
+/* ·
+   ·
+   ·  Is this a local URL?
+   ·
+   · · · · · · · · · */
+
+function isLocalURL(url) {
+	if(url.substring(0,window.siteInstanceURL.length) == window.siteInstanceURL) {
+		return true;
+		}
+	else {
+		return false;
+		}
+	}
+
+
+/* ·
+   ·
+   ·  Check for hidden items and show the new queets bar if there are any
+   ·
+   · · · · · · · · · */
+
+function maybeShowTheNewQueetsBar() {
+
+	var newQueetsNum = $('#feed-body').find('.stream-item.hidden:not(.always-hidden):not(.hidden-repeat)').length;
+
+	// subtract the number of hidden notices from muted users if this isn't the notifications stream,
+	// or if this is the notifications stream but the user has opted out of seeing notifications from muted users
+	var mutedHiddenNum = 0;
+	if(window.currentStreamObject.name == 'notifications') {
+		if($('#feed-body').hasClass('hide-notifications-from-muted-users')) {
+			mutedHiddenNum = $('#feed-body').find('.stream-item.hidden.user-muted:not(.always-hidden):not(.hidden-repeat)').length;
+			}
+		}
+	else {
+		var mutedHiddenNum = $('#feed-body').find('.stream-item.hidden.user-muted:not(.always-hidden):not(.hidden-repeat)').length;
+		}
+
+	newQueetsNum = newQueetsNum - mutedHiddenNum;
+
+	if(newQueetsNum > 0) {
+
+		$('#new-queets-bar').parent().removeClass('hidden');
+
+		// bar label
+		if(newQueetsNum == 1) { var q_txt = window.sL.newQueet; }
+		else { var q_txt = window.sL.newQueets; }
+		if(window.currentStreamObject.name == 'notifications') {
+			if(newQueetsNum == 1) { var q_txt = window.sL.newNotification; }
+			else { var q_txt = window.sL.newNotifications; }
+			}
+
+		$('#new-queets-bar').html(q_txt.replace('{new-notice-count}',newQueetsNum));
+		}
+	}
+
+
+
+/* ·
+   ·
+   ·  Align tooltips to the hovered element
+   ·
+   · · · · · · · · · */
+
+function alignTooltipTohoveredElement(tooltipElement,tooltipCaret,hovered) {
+	var tooltipWidth = tooltipElement.outerWidth();
+	var tooltipHeight = tooltipElement.outerHeight();
+	var windowWidth = $(window).width();
+	var windowScrollPosY = $(window).scrollTop();
+	var targetPosX = hovered.offset().left;
+	var targetPosY = hovered.offset().top;
+	var targetHeight = hovered.outerHeight();
+	var targetWidth = hovered.outerWidth();
+
+	// too little space on top of element, show tooltip at bottom
+	if((targetPosY-windowScrollPosY-tooltipHeight-10) < 0) {
+		var tooltipCaretPosX = targetPosX+targetWidth/2-5;
+		var tooltipCaretPosY = targetPosY+targetHeight+2;
+
+		// caret always directly under element
+		tooltipCaret.css('left',tooltipCaretPosX + 'px');
+		tooltipCaret.css('top',tooltipCaretPosY + 'px');
+		tooltipCaret.addClass('top');
+
+		// tooltip itself might bleed over the window edges, and need moving
+		var tooltipPosX = targetPosX+targetWidth/2-tooltipWidth/2;
+		var tooltipPosY = targetPosY+targetHeight+7;
+		if((tooltipPosX+tooltipWidth)>windowWidth) {
+			tooltipPosX = windowWidth-tooltipWidth-5;
+			}
+		if(tooltipPosX < 5) {
+			tooltipPosX = 5;
+			}
+		tooltipElement.css('left',tooltipPosX + 'px');
+		tooltipElement.css('top',tooltipPosY + 'px');
+		}
+	// tooltip at top
+	else {
+		var tooltipCaretPosX = targetPosX+targetWidth/2-5;
+		var tooltipCaretPosY = targetPosY-8;
+
+		// caret always directly on top of element
+		tooltipCaret.css('left',tooltipCaretPosX + 'px');
+		tooltipCaret.css('top',tooltipCaretPosY + 'px');
+		tooltipCaret.addClass('bottom');
+
+		// tooltip itself might bleed over the window edges, and need moving
+		var tooltipPosX = targetPosX+targetWidth/2-tooltipWidth/2;
+		var tooltipPosY = targetPosY-7-tooltipHeight;
+		if((tooltipPosX+tooltipWidth)>windowWidth) {
+			tooltipPosX = windowWidth-tooltipWidth-5;
+			}
+		if(tooltipPosX < 5) {
+			tooltipPosX = 5;
+			}
+		tooltipElement.css('left',tooltipPosX + 'px');
+		tooltipElement.css('top',tooltipPosY + 'px');
+
+		}
+	}
+
+
 
 
 /* ·
@@ -225,29 +851,43 @@ function checkLocalStorage() {
 
 function cacheSyntaxHighlighting() {
 
-	// regexps for syntax highlighting
-	var allDomains = '(abb|abbott|abogado|ac|academy|accenture|accountant|accountants|active|actor|ad|ads|adult|ae|aero|af|afl|ag|agency|ai|aig|airforce|al|allfinanz|alsace|am|amsterdam|an|android|ao|apartments|aq|aquarelle|ar|archi|army|arpa|as|asia|associates|at|attorney|au|auction|audio|auto|autos|aw|ax|axa|az|ba|band|bank|bar|barclaycard|barclays|bargains|bauhaus|bayern|bb|bbc|bbva|bd|be|beer|berlin|best|bf|bg|bh|bi|bible|bid|bike|bingo|bio|biz|bj|bl|black|blackfriday|bloomberg|blue|bm|bmw|bn|bnpparibas|bo|boats|bond|boo|boutique|bq|br|bridgestone|broker|brother|brussels|bs|bt|budapest|build|builders|business|buzz|bv|bw|by|bz|bzh|ca|cab|cafe|cal|camera|camp|cancerresearch|canon|capetown|capital|caravan|cards|care|career|careers|cars|cartier|casa|cash|casino|cat|catering|cbn|cc|cd|center|ceo|cern|cf|cfa|cfd|cg|ch|channel|chat|cheap|chloe|christmas|chrome|church|ci|cisco|citic|city|ck|cl|claims|cleaning|click|clinic|clothing|club|cm|cn|co|coach|codes|coffee|college|cologne|com|community|company|computer|condos|construction|consulting|contractors|cooking|cool|coop|corsica|country|coupons|courses|cr|credit|creditcard|cricket|crs|cruises|cu|cuisinella|cv|cw|cx|cy|cymru|cyou|cz|dabur|dad|dance|date|dating|datsun|day|dclk|de|deals|degree|delivery|democrat|dental|dentist|desi|design|dev|diamonds|diet|digital|direct|directory|discount|dj|dk|dm|dnp|do|docs|dog|doha|domains|doosan|download|durban|dvag|dz|earth|eat|ec|edu|education|ee|eg|eh|email|emerck|energy|engineer|engineering|enterprises|epson|equipment|er|erni|es|esq|estate|et|eu|eurovision|eus|events|everbank|exchange|expert|exposed|express|fail|faith|fan|fans|farm|fashion|feedback|fi|film|finance|financial|firmdale|fish|fishing|fit|fitness|fj|fk|flights|florist|flowers|flsmidth|fly|fm|fo|foo|football|forex|forsale|foundation|fr|frl|frogans|fund|furniture|futbol|fyi|ga|gal|gallery|garden|gb|gbiz|gd|gdn|ge|gent|gf|gg|ggee|gh|gi|gift|gifts|gives|gl|glass|gle|global|globo|gm|gmail|gmo|gmx|gn|gold|goldpoint|golf|goo|goog|google|gop|gov|gp|gq|gr|graphics|gratis|green|gripe|gs|gt|gu|guge|guide|guitars|guru|gw|gy|hamburg|hangout|haus|healthcare|help|here|hermes|hiphop|hitachi|hiv|hk|hm|hn|hockey|holdings|holiday|homedepot|homes|honda|horse|host|hosting|house|how|hr|ht|hu|ibm|icbc|icu|id|ie|ifm|il|im|immo|immobilien|in|industries|infiniti|info|ing|ink|institute|insure|int|international|investments|io|iq|ir|irish|is|it|iwc|java|jcb|je|jetzt|jewelry|jll|jm|jo|jobs|joburg|jp|juegos|kaufen|kddi|ke|kg|kh|ki|kim|kitchen|kiwi|km|kn|koeln|komatsu|kp|kr|krd|kred|kw|ky|kyoto|kz|la|lacaixa|land|lat|latrobe|lawyer|lb|lc|lds|lease|leclerc|legal|lgbt|li|liaison|lidl|life|lighting|limited|limo|link|lk|loan|loans|lol|london|lotte|lotto|love|lr|ls|lt|ltda|lu|lupin|luxe|luxury|lv|ly|ma|madrid|maif|maison|management|mango|market|marketing|markets|marriott|mba|mc|md|me|media|meet|melbourne|meme|memorial|men|menu|mf|mg|mh|miami|mil|mini|mk|ml|mm|mma|mn|mo|mobi|moda|moe|monash|money|montblanc|mormon|mortgage|moscow|motorcycles|mov|movie|mp|mq|mr|ms|mt|mtn|mtpc|mu|museum|mv|mw|mx|my|mz|na|nadex|nagoya|name|navy|nc|ne|nec|net|network|neustar|new|news|nexus|nf|ng|ngo|nhk|ni|nico|ninja|nissan|nl|no|np|nr|nra|nrw|ntt|nu|nyc|nz|okinawa|om|one|ong|onl|online|ooo|org|organic|osaka|otsuka|ovh|pa|page|panerai|paris|partners|parts|party|pe|pf|pg|ph|pharmacy|philips|photo|photography|photos|physio|piaget|pics|pictet|pictures|pink|pizza|pk|pl|place|plumbing|plus|pm|pn|pohl|poker|porn|post|pr|praxi|press|pro|prod|productions|prof|properties|property|ps|pt|pub|pw|py|qa|qpon|quebec|racing|re|realtor|recipes|red|redstone|rehab|reise|reisen|reit|ren|rent|rentals|repair|report|republican|rest|restaurant|review|reviews|rich|rio|rip|ro|rocks|rodeo|rs|rsvp|ru|ruhr|run|rw|ryukyu|sa|saarland|sale|samsung|sandvik|sandvikcoromant|sap|sarl|saxo|sb|sc|sca|scb|schmidt|scholarships|school|schule|schwarz|science|scot|sd|se|seat|sener|services|sew|sex|sexy|sg|sh|shiksha|shoes|show|shriram|si|singles|site|sj|sk|ski|sky|sl|sm|sn|sncf|so|soccer|social|software|sohu|solar|solutions|sony|soy|space|spiegel|spreadbetting|sr|ss|st|study|style|su|sucks|supplies|supply|support|surf|surgery|suzuki|sv|swiss|sx|sy|sydney|systems|sz|taipei|tatar|tattoo|tax|taxi|tc|td|team|tech|technology|tel|temasek|tennis|tf|tg|th|thd|theater|tickets|tienda|tips|tires|tirol|tj|tk|tl|tm|tn|to|today|tokyo|tools|top|toray|toshiba|tours|town|toys|tp|tr|trade|trading|training|travel|trust|tt|tui|tv|tw|tz|ua|ug|uk|um|university|uno|uol|us|uy|uz|va|vacations|vc|ve|vegas|ventures|versicherung|vet|vg|vi|viajes|video|villas|vision|vlaanderen|vn|vodka|vote|voting|voto|voyage|vu|wales|walter|wang|watch|webcam|website|wed|wedding|weir|wf|whoswho|wien|wiki|williamhill|win|wme|work|works|world|ws|wtc|wtf|xbox|xerox|xin|测试|परीक्षा|佛山|慈善|集团|在线|한국|ভারত|八卦|موقع|বাংলা|公益|公司|移动|我爱你|москва|испытание|қаз|онлайн|сайт|срб|бел|时尚|테스트|淡马锡|орг|삼성|சிங்கப்பூர்|商标|商店|商城|дети|мкд|טעסט|工行|中文网|中信|中国|中國|娱乐|谷歌|భారత్|ලංකා|測試|ભારત|भारत|آزمایشی|பரிட்சை|网店|संगठन|餐厅|网络|укр|香港|δοκιμή|飞利浦|إختبار|台湾|台灣|手机|мон|الجزائر|عمان|ایران|امارات|بازار|پاکستان|الاردن|بھارت|المغرب|السعودية|سودان|عراق|مليسيا|澳門|政府|شبكة|გე|机构|组织机构|健康|ไทย|سورية|рус|рф|تونس|みんな|グーグル|ελ|世界|ਭਾਰਤ|网址|游戏|vermögensberater|vermögensberatung|企业|信息|مصر|قطر|广东|இலங்கை|இந்தியா|հայ|新加坡|فلسطين|テスト|政务|xxx|xyz|yachts|yandex|ye|yodobashi|yoga|yokohama|youtube|yt|za|zip|zm|zone|zuerich|zw|oracle|xn--1qqw23a|xn--30rr7y|xn--3bst00m|xn--3ds443g|xn--3e0b707e|xn--45brj9c|xn--45q11c|xn--4gbrim|xn--55qw42g|xn--55qx5d|xn--6frz82g|xn--6qq986b3xl|xn--80adxhks|xn--80ao21a|xn--80asehdb|xn--80aswg|xn--90a3ac|xn--90ais|xn--9et52u|xn--b4w605ferd|xn--c1avg|xn--cg4bki|xn--clchc0ea0b2g2a9gcd|xn--czr694b|xn--czrs0t|xn--czru2d|xn--d1acj3b|xn--d1alf|xn--estv75g|xn--fiq228c5hs|xn--fiq64b|xn--fiqs8s|xn--fiqz9s|xn--fjq720a|xn--flw351e|xn--fpcrj9c3d|xn--fzc2c9e2c|xn--gecrj9c|xn--h2brj9c|xn--hxt814e|xn--i1b6b1a6a2e|xn--imr513n|xn--io0a7i|xn--j1amh|xn--j6w193g|xn--kcrx77d1x4a|xn--kprw13d|xn--kpry57d|xn--kput3i|xn--l1acc|xn--lgbbat1ad8j|xn--mgb9awbf|xn--mgba3a4f16a|xn--mgbaam7a8h|xn--mgbab2bd|xn--mgbayh7gpa|xn--mgbbh1a71e|xn--mgbc0a9azcg|xn--mgberp4a5d4ar|xn--mgbpl2fh|xn--mgbx4cd0ab|xn--mxtq1m|xn--ngbc5azd|xn--node|xn--nqv7f|xn--nqv7fs00ema|xn--nyqy26a|xn--o3cw4h|xn--ogbpf8fl|xn--p1acf|xn--p1ai|xn--pgbs0dh|xn--q9jyb4c|xn--qcka1pmc|xn--rhqv96g|xn--s9brj9c|xn--ses554g|xn--unup4y|xn--vermgensberater-ctb|xn--vermgensberatung-pwb|xn--vhquv|xn--vuq861b|xn--wgbh1c|xn--wgbl6a|xn--xhq521b|xn--xkc2al3hye2a|xn--xkc2dl3a5ee0h|xn--y9a3aq|xn--yfro4i67o|xn--ygbi2ammx|xn--zfr164b)';
 	window.syntaxHighlightingRegexps = Object();
-	window.syntaxHighlightingRegexps.externalMention = XRegExp.cache('(^|\\s|\\.|<br>)(@)[a-zA-Z0-9]+(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
-	window.syntaxHighlightingRegexps.mention = /(^|\s|\.|<br>)(@)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;
-	window.syntaxHighlightingRegexps.tag = XRegExp.cache('(^|\\s|\\.|<br>)(\\#)[\\p{L}\\p{N}\\-\\.]+($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
-	window.syntaxHighlightingRegexps.group = /(^|\s|\.|<br>)(\!)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&)/;
-	window.syntaxHighlightingRegexps.url = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;)(http\\:\\/\\/|https\:\\/\\/)([\\p{L}\\p{N}\\-\\.]+)?(\\.)(' + allDomains + ')(\\/[\\p{L}\\p{N}\\%\\!\\*\\\'\\(\\)\\;\\:\\@\\&\\=\\+\\$\\,\\/\\?\\#\\[\\]\\-\\_\\.\\~]+)?(\\/)?($|\\s|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
-	window.syntaxHighlightingRegexps.urlWithoutProtocol = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')(\\/[\\p{L}\\p{N}\\%\\!\\*\\\'\\(\\)\\;\\:\\@\\&\\=\\+\\$\\,\\/\\?\\#\\[\\]\\-\\_\\.\\~]+)?(\\/)?($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
-	window.syntaxHighlightingRegexps.email = XRegExp.cache('(^|\\s|\\.|<br>)([a-zA-Z0-9\\!\\#\\$\\%\\&\\\'\\*\\+\\-\\/\\=\\?\\^\\_\\`\\{\\|\\}\\~\\.]+)?(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&)');
+	var allDomains = '(abb|abbott|abogado|ac|academy|accenture|accountant|accountants|active|actor|ad|ads|adult|ae|aero|af|afl|ag|agency|ai|aig|airforce|al|allfinanz|alsace|am|amsterdam|an|android|ao|apartments|aq|aquarelle|ar|archi|army|arpa|as|asia|associates|at|attorney|au|auction|audio|auto|autos|aw|ax|axa|az|ba|band|bank|bar|barclaycard|barclays|bargains|bauhaus|bayern|bb|bbc|bbva|bd|be|beer|berlin|best|bf|bg|bh|bi|bible|bid|bike|bingo|bio|biz|bj|bl|black|blackfriday|bloomberg|blue|bm|bmw|bn|bnpparibas|bo|boats|bond|boo|boutique|bq|br|bridgestone|broker|brother|brussels|bs|bt|budapest|build|builders|business|buzz|bv|bw|by|bz|bzh|ca|cab|cafe|cal|camera|camp|cancerresearch|canon|capetown|capital|caravan|cards|care|career|careers|cars|cartier|casa|cash|casino|cat|catering|cbn|cc|cd|center|ceo|cern|cf|cfa|cfd|cg|ch|channel|chat|cheap|chloe|christmas|chrome|church|ci|cisco|citic|city|ck|cl|claims|cleaning|click|clinic|clothing|club|cm|cn|co|coach|codes|coffee|college|cologne|com|community|company|computer|condos|construction|consulting|contractors|cooking|cool|coop|corsica|country|coupons|courses|cr|credit|creditcard|cricket|crs|cruises|cu|cuisinella|cv|cw|cx|cy|cymru|cyou|cz|dabur|dad|dance|date|dating|datsun|day|dclk|de|deals|degree|delivery|democrat|dental|dentist|desi|design|dev|diamonds|diet|digital|direct|directory|discount|dj|dk|dm|dnp|do|docs|dog|doha|domains|doosan|download|durban|dvag|dz|earth|eat|ec|edu|education|ee|eg|eh|email|emerck|energy|engineer|engineering|enterprises|epson|equipment|er|erni|es|esq|estate|et|eu|eurovision|eus|events|everbank|exchange|expert|exposed|express|fail|faith|fan|fans|farm|fashion|feedback|fi|film|finance|financial|firmdale|fish|fishing|fit|fitness|fj|fk|flights|florist|flowers|flsmidth|fly|fm|fo|foo|football|forex|forsale|foundation|fr|frl|frogans|fund|furniture|futbol|fyi|ga|gal|gallery|garden|gb|gbiz|gd|gdn|ge|gent|gf|gg|ggee|gh|gi|gift|gifts|gives|gl|glass|gle|global|globo|gm|gmail|gmo|gmx|gn|gold|goldpoint|golf|goo|goog|google|gop|gov|gp|gq|gr|graphics|gratis|green|gripe|gs|gt|gu|guge|guide|guitars|guru|gw|gy|hamburg|hangout|haus|healthcare|help|here|hermes|hiphop|hitachi|hiv|hk|hm|hn|hockey|holdings|holiday|homedepot|homes|honda|horse|host|hosting|house|how|hr|ht|hu|ibm|icbc|icu|id|ie|ifm|il|im|immo|immobilien|in|industries|infiniti|info|ing|ink|institute|insure|int|international|investments|io|iq|ir|irish|is|it|iwc|java|jcb|je|jetzt|jewelry|jll|jm|jo|jobs|joburg|jp|juegos|kaufen|kddi|ke|kg|kh|ki|kim|kitchen|kiwi|km|kn|koeln|komatsu|kp|kr|krd|kred|kw|ky|kyoto|kz|la|lacaixa|land|lat|latrobe|lawyer|lb|lc|lds|lease|leclerc|legal|lgbt|li|liaison|lidl|life|lighting|limited|limo|link|lk|loan|loans|lol|london|lotte|lotto|love|lr|ls|lt|ltda|lu|lupin|luxe|luxury|lv|ly|ma|madrid|maif|maison|management|mango|market|marketing|markets|marriott|mba|mc|md|me|media|meet|melbourne|meme|memorial|men|menu|mf|mg|mh|miami|mil|mini|mk|ml|mm|mma|mn|mo|mobi|moda|moe|monash|money|montblanc|mormon|mortgage|moscow|motorcycles|mov|movie|mp|mq|mr|ms|mt|mtn|mtpc|mu|museum|mv|mw|mx|my|mz|na|nadex|nagoya|name|navy|nc|ne|nec|net|network|neustar|new|news|nexus|nf|ng|ngo|nhk|ni|nico|ninja|nissan|nl|no|np|nr|nra|nrw|ntt|nu|nyc|nz|okinawa|om|one|ong|onl|online|ooo|org|organic|osaka|otsuka|ovh|pa|page|panerai|paris|partners|parts|party|pe|pf|pg|ph|pharmacy|philips|photo|photography|photos|physio|piaget|pics|pictet|pictures|pink|pizza|pk|pl|place|plumbing|plus|pm|pn|pohl|poker|porn|post|pr|praxi|press|pro|prod|productions|prof|properties|property|ps|pt|pub|pw|py|qa|qpon|quebec|racing|re|realtor|recipes|red|redstone|rehab|reise|reisen|reit|ren|rent|rentals|repair|report|republican|rest|restaurant|review|reviews|rich|rio|rip|ro|rocks|rodeo|rs|rsvp|ru|ruhr|run|rw|ryukyu|sa|saarland|sale|samsung|sandvik|sandvikcoromant|sap|sarl|saxo|sb|sc|sca|scb|schmidt|scholarships|school|schule|schwarz|science|scot|sd|se|seat|sener|services|sew|sex|sexy|sg|sh|shiksha|shoes|show|shriram|si|singles|site|sj|sk|ski|sky|sl|sm|sn|sncf|so|soccer|social|software|sohu|solar|solutions|sony|soy|space|spiegel|spreadbetting|sr|ss|st|study|style|su|sucks|supplies|supply|support|surf|surgery|suzuki|sv|swiss|sx|sy|sydney|systems|sz|taipei|tatar|tattoo|tax|taxi|tc|td|team|tech|technology|tel|temasek|tennis|tf|tg|th|thd|theater|tickets|tienda|tips|tires|tirol|tj|tk|tl|tm|tn|to|today|tokyo|tools|top|toray|toshiba|tours|town|toys|tp|tr|trade|trading|training|travel|trust|tt|tui|tv|tw|tz|ua|ug|uk|um|university|uno|uol|us|uy|uz|va|vacations|vc|ve|vegas|ventures|versicherung|vet|vg|vi|viajes|video|villas|vision|vlaanderen|vn|vodka|vote|voting|voto|voyage|vu|wales|walter|wang|watch|webcam|website|wed|wedding|weir|wf|whoswho|wien|wiki|williamhill|win|wme|work|works|world|ws|wtc|wtf|xbox|xerox|xin|测试|परीक्षा|佛山|慈善|集团|在线|한국|ভারত|八卦|موقع|বাংলা|公益|公司|移动|我爱你|москва|испытание|қаз|онлайн|сайт|срб|бел|时尚|테스트|淡马锡|орг|삼성|சிங்கப்பூர்|商标|商店|商城|дети|мкд|טעסט|工行|中文网|中信|中国|中國|娱乐|谷歌|భారత్|ලංකා|測試|ભારત|भारत|آزمایشی|பரிட்சை|网店|संगठन|餐厅|网络|укр|香港|δοκιμή|飞利浦|إختبار|台湾|台灣|手机|мон|الجزائر|عمان|ایران|امارات|بازار|پاکستان|الاردن|بھارت|المغرب|السعودية|سودان|عراق|مليسيا|澳門|政府|شبكة|გე|机构|组织机构|健康|ไทย|سورية|рус|рф|تونس|みんな|グーグル|ελ|世界|ਭਾਰਤ|网址|游戏|vermögensberater|vermögensberatung|企业|信息|مصر|قطر|广东|இலங்கை|இந்தியா|հայ|新加坡|فلسطين|テスト|政务|xxx|xyz|yachts|yandex|ye|yodobashi|yoga|yokohama|youtube|yt|za|zip|zm|zone|zuerich|zw|oracle|xn--1qqw23a|xn--30rr7y|xn--3bst00m|xn--3ds443g|xn--3e0b707e|xn--45brj9c|xn--45q11c|xn--4gbrim|xn--55qw42g|xn--55qx5d|xn--6frz82g|xn--6qq986b3xl|xn--80adxhks|xn--80ao21a|xn--80asehdb|xn--80aswg|xn--90a3ac|xn--90ais|xn--9et52u|xn--b4w605ferd|xn--c1avg|xn--cg4bki|xn--clchc0ea0b2g2a9gcd|xn--czr694b|xn--czrs0t|xn--czru2d|xn--d1acj3b|xn--d1alf|xn--estv75g|xn--fiq228c5hs|xn--fiq64b|xn--fiqs8s|xn--fiqz9s|xn--fjq720a|xn--flw351e|xn--fpcrj9c3d|xn--fzc2c9e2c|xn--gecrj9c|xn--h2brj9c|xn--hxt814e|xn--i1b6b1a6a2e|xn--imr513n|xn--io0a7i|xn--j1amh|xn--j6w193g|xn--kcrx77d1x4a|xn--kprw13d|xn--kpry57d|xn--kput3i|xn--l1acc|xn--lgbbat1ad8j|xn--mgb9awbf|xn--mgba3a4f16a|xn--mgbaam7a8h|xn--mgbab2bd|xn--mgbayh7gpa|xn--mgbbh1a71e|xn--mgbc0a9azcg|xn--mgberp4a5d4ar|xn--mgbpl2fh|xn--mgbx4cd0ab|xn--mxtq1m|xn--ngbc5azd|xn--node|xn--nqv7f|xn--nqv7fs00ema|xn--nyqy26a|xn--o3cw4h|xn--ogbpf8fl|xn--p1acf|xn--p1ai|xn--pgbs0dh|xn--q9jyb4c|xn--qcka1pmc|xn--rhqv96g|xn--s9brj9c|xn--ses554g|xn--unup4y|xn--vermgensberater-ctb|xn--vermgensberatung-pwb|xn--vhquv|xn--vuq861b|xn--wgbh1c|xn--wgbl6a|xn--xhq521b|xn--xkc2al3hye2a|xn--xkc2dl3a5ee0h|xn--y9a3aq|xn--yfro4i67o|xn--ygbi2ammx|xn--zfr164b)';
+	window.syntaxHighlightingRegexps.externalMention = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;|\\()(@)[a-zA-Z0-9]+(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&|\\)|\\\')');
+	window.syntaxHighlightingRegexps.mention = /(^|\s|\.|<br>|&nbsp;|\()(@)[a-zA-Z0-9]+($|\s|\.|\,|\:|\-|\<|\!|\?|\&|\)|\')/;
+	window.syntaxHighlightingRegexps.tag = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;|\\()(\\#)[\\p{L}\\p{N}\\-\\.]+($|\\s|\\,|\\:|\\<|\\!|\\?|\\&|\\)|\\\')');
+	window.syntaxHighlightingRegexps.url = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;|\\()(http\\:\\/\\/|https\:\\/\\/)([\\p{L}\\p{N}\\-\\.]+)?(\\.)(' + allDomains + ')(\\/[\\p{L}\\p{N}\\%\\!\\*\\\'\\(\\)\\;\\:\\@\\&\\=\\+\\$\\,\\/\\?\\#\\[\\]\\-\\_\\.\\~]+)?(\\/)?($|\\s|\\,|\\:|\\-|\\<|\\!|\\?|\\&|\\)|\\\')');
+	window.syntaxHighlightingRegexps.urlWithoutProtocol = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;|\\()[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')(\\/[\\p{L}\\p{N}\\%\\!\\*\\\'\\(\\)\\;\\:\\@\\&\\=\\+\\$\\,\\/\\?\\#\\[\\]\\-\\_\\.\\~]+)?(\\/)?($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&|\\)|\\\')');
+	window.syntaxHighlightingRegexps.email = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;|\\()([a-zA-Z0-9\\!\\#\\$\\%\\&\\\'\\*\\+\\-\\/\\=\\?\\^\\_\\`\\{\\|\\}\\~\\.]+)?(@)[\\p{L}\\p{N}\\-\\.]+(\\.)(' + allDomains + ')($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&|\\)|\\\')');
+	cacheSyntaxHighlightingGroups();
+	}
+
+/* ·
+   ·
+   ·  Cache syntax highlighting for groups
+   ·
+   · · · · · · · · · */
+
+function cacheSyntaxHighlightingGroups() {
+	if(window.groupNicknamesAndLocalAliases.length > 0) {
+		var allGroupNicknamesAndLocalAliases = '(' + window.groupNicknamesAndLocalAliases.join('|') + ')';
+		window.syntaxHighlightingRegexps.group = XRegExp.cache('(^|\\s|\\.|<br>|&nbsp;|\\()(\\!)' + allGroupNicknamesAndLocalAliases + '($|\\s|\\.|\\,|\\:|\\-|\\<|\\!|\\?|\\&|\\)|\\\')');
+		}
 	}
 
 
 /* ·
    ·
-   ·  User array cache
+   ·  User array cache (called array because it's an array in php)
    ·
-   ·  Stored in window.userArrayCache as instance_url/nickname
+   ·  Stored in window.userArrayCache with unique key like instance_url/nickname
    ·  with protocol (http:// or https://) trimmed off, e.g. "quitter.se/hannes2peer"
    ·
    · · · · · · · · · */
 
 window.userArrayCache = new Object();
+window.convertUriToUserArrayCacheKey = new Object();
+window.convertStatusnetProfileUrlToUserArrayCacheKey = new Object();
 
 function userArrayCacheStore(data) {
 
@@ -266,8 +906,8 @@ function userArrayCacheStore(data) {
 		}
 	// we can also get either local...
 	else if(typeof data.local != 'undefined' && typeof data.local.statusnet_profile_url != 'undefined' ) {
-		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.local.statusnet_profile_url, data.external.screen_name);
-		var key = instanceUrlWithoutProtocol + '/' + data.external.screen_name;
+		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.local.statusnet_profile_url, data.local.screen_name);
+		var key = instanceUrlWithoutProtocol + '/' + data.local.screen_name;
 		data.external = false;
 		var dataToStore = data;
 		}
@@ -283,11 +923,10 @@ function userArrayCacheStore(data) {
 		var instanceUrlWithoutProtocol = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(data.statusnet_profile_url, data.screen_name);
 		var key = instanceUrlWithoutProtocol + '/' + data.screen_name;
 
-		var dataProfileImageUrlWithoutProtocol = removeProtocolFromUrl(data.profile_image_url);
-		var siteInstanceURLWithoutProtocol = removeProtocolFromUrl(window.siteInstanceURL);
+		var localOrExternal = detectLocalOrExternalUserObject(data);
 
 		// local
-		if(dataProfileImageUrlWithoutProtocol.substring(0,siteInstanceURLWithoutProtocol.length) == siteInstanceURLWithoutProtocol){
+		if(localOrExternal == 'local'){
 			var dataToStore = {local:data,external:false};
 			}
 		// external
@@ -302,6 +941,11 @@ function userArrayCacheStore(data) {
 	// store
 	if(typeof window.userArrayCache[key] == 'undefined') {
 		window.userArrayCache[key] = dataToStore;
+		window.userArrayCache[key].modified = Date.now();
+
+		// easy conversion between URI and statusnet_profile_url and the key we're using in window.userArrayCache
+		window.convertUriToUserArrayCacheKey[dataToStore.local.ostatus_uri] = key;
+		window.convertStatusnetProfileUrlToUserArrayCacheKey[dataToStore.local.statusnet_profile_url] = key;
 		}
 	else {
 		if(dataToStore.local) {
@@ -312,14 +956,29 @@ function userArrayCacheStore(data) {
 				}
 
 			window.userArrayCache[key].local = dataToStore.local;
+
+			// easy conversion between URI and statusnet_profile_url and the key we're using in window.userArrayCache
+			window.convertUriToUserArrayCacheKey[dataToStore.local.ostatus_uri] = key;
+			window.convertStatusnetProfileUrlToUserArrayCacheKey[dataToStore.local.statusnet_profile_url] = key;
 			}
 		if(dataToStore.external) {
 			window.userArrayCache[key].external = dataToStore.external;
+
+			// easy conversion between URI and the key we're using in window.userArrayCache
+			window.convertUriToUserArrayCacheKey[dataToStore.external.ostatus_uri] = key;
+			window.convertStatusnetProfileUrlToUserArrayCacheKey[dataToStore.external.statusnet_profile_url] = key;
+			}
+		// store the time when this record was modified
+		if(dataToStore.local || dataToStore.external) {
+			window.userArrayCache[key].modified = Date.now();
 			}
 		}
 	}
 
 function userArrayCacheGetByLocalNickname(localNickname) {
+	if(localNickname.substring(0,1) == '@') {
+		localNickname = localNickname.substring(1);
+		}
 	if(typeof window.userArrayCache[window.siteRootDomain + '/' + localNickname] != 'undefined') {
 		return window.userArrayCache[window.siteRootDomain + '/' + localNickname];
 		}
@@ -329,15 +988,61 @@ function userArrayCacheGetByLocalNickname(localNickname) {
 	}
 
 function userArrayCacheGetByProfileUrlAndNickname(profileUrl, nickname) {
-	var guessedInstanceUrl = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(profileUrl, nickname);
-	if(typeof window.userArrayCache[guessedInstanceUrl + '/' + nickname] == 'undefined') {
-		return false;
+	if(nickname.substring(0,1) == '@') {
+		nickname = nickname.substring(1);
 		}
+	// the url might match a known profile uri
+	if(typeof window.convertUriToUserArrayCacheKey[profileUrl] != 'undefined') {
+		if(typeof window.userArrayCache[window.convertUriToUserArrayCacheKey[profileUrl]] != 'undefined') {
+			return window.userArrayCache[window.convertUriToUserArrayCacheKey[profileUrl]];
+			}
+		}
+	// or the href attribute might match a known statusnet_profile_url
+	else if(typeof window.convertStatusnetProfileUrlToUserArrayCacheKey[profileUrl] != 'undefined') {
+		if(typeof window.userArrayCache[window.convertStatusnetProfileUrlToUserArrayCacheKey[profileUrl]] != 'undefined') {
+			return window.userArrayCache[window.convertStatusnetProfileUrlToUserArrayCacheKey[profileUrl]];
+			}
+		}
+	// or we try to guess the instance url, and see if we have a match in our cache
+	else if(typeof window.userArrayCache[guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(profileUrl, nickname) + '/' + nickname] != 'undefined') {
+		return window.userArrayCache[guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(profileUrl, nickname) + '/' + nickname];
+		}
+	// we couldn't find any cached user array
 	else {
-		return window.userArrayCache[guessedInstanceUrl + '/' + nickname];
+		return false;
 		}
 	}
 
+function userArrayCacheGetUserNicknameById(id) {
+
+	var possibleUserURI = window.siteInstanceURL + 'user/' + id;
+	var key = window.convertUriToUserArrayCacheKey[possibleUserURI];
+
+	if(typeof key != 'undefined') {
+		if(typeof window.userArrayCache[key] != 'undefined') {
+			return window.userArrayCache[key].local.screen_name;
+			}
+		}
+	return false;
+	}
+
+
+/* ·
+   ·
+   ·  Detect if the supplied user object is from the local server or external
+   ·
+   · · · · · · · · · */
+
+function detectLocalOrExternalUserObject(userObject) {
+	var dataProfileImageUrlWithoutProtocol = removeProtocolFromUrl(userObject.profile_image_url);
+	var siteInstanceURLWithoutProtocol = removeProtocolFromUrl(window.siteInstanceURL);
+	if(dataProfileImageUrlWithoutProtocol.substring(0,siteInstanceURLWithoutProtocol.length) == siteInstanceURLWithoutProtocol){
+		return 'local';
+		}
+	else {
+		return 'external';
+		}
+	}
 
 
 /* ·
@@ -385,12 +1090,57 @@ function guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(profileUrl, ni
    · · · · · · · · · */
 
 function removeProtocolFromUrl(url) {
+	if(typeof url == 'undefined'
+	|| url === null
+	|| url === false
+	|| url == '') {
+		return '';
+		}
 	if(url.indexOf('://') == -1) {
 		return url;
 		}
 	return url.substring(url.indexOf('://')+3);
 	}
 
+/* ·
+   ·
+   ·  Get host from URL
+   ·
+   · · · · · · · · · */
+
+function getHost(url) {
+    var a = document.createElement('a');
+    a.href = url;
+    return a.hostname;
+	}
+
+
+/* ·
+   ·
+   ·  Is this url a link to my profile?
+   ·
+   · · · · · · · · · */
+
+function thisIsALinkToMyProfile(url) {
+	if(typeof url == 'undefined') {
+		return false;
+		}
+	if(!window.loggedIn) {
+		return false;
+		}
+	if(url.slice(-1) == '/') { // remove trailing '/'
+		url = url.slice(0,-1);
+		}
+	var urlWithoutProtocol = removeProtocolFromUrl(url);
+	if(removeProtocolFromUrl(window.loggedIn.statusnet_profile_url) == urlWithoutProtocol) {
+		return true;
+		}
+	var userIdUrlWithoutProtocol = removeProtocolFromUrl(window.siteInstanceURL) + 'user/' + window.loggedIn.id;
+	if(userIdUrlWithoutProtocol == urlWithoutProtocol) {
+		return true;
+		}
+	return false;
+	}
 
 
 /* ·
@@ -417,20 +1167,417 @@ function searchForUserDataToCache(obj) {
 
 /* ·
    ·
+   ·   Updates user data loaded into the stream with the latest data from the user array cache
+   ·   This function should therefor always be invoked _after_ searchForUserDataToCache()
+   ·
+   · · · · · · · · · · · · · */
+
+function updateUserDataInStream() {
+	var timeNow = Date.now();
+	$.each(window.userArrayCache,function(k,userArray){
+		// if the cache record was updated the latest second, we assume this is brand new info that we haven't
+		// updated the stream with
+		if(typeof userArray.local != 'undefined'
+		&& userArray.local !== false
+		&& typeof userArray.modified != 'undefined'
+		&& (timeNow-userArray.modified)<1000) {
+
+			// add/remove silenced class to stream items and profile cards
+			if(userArray.local.is_silenced === true) {
+				$('.stream-item[data-user-id=' + userArray.local.id + ']').addClass('silenced');
+				$('.profile-card .profile-header-inner[data-user-id=' + userArray.local.id + ']').addClass('silenced');
+				$('.user-menu-cog[data-user-id=' + userArray.local.id + ']').addClass('silenced');
+				}
+			else {
+				$('.stream-item[data-user-id=' + userArray.local.id + ']').removeClass('silenced')
+				$('.profile-card .profile-header-inner[data-user-id=' + userArray.local.id + ']').removeClass('silenced');
+				$('.user-menu-cog[data-user-id=' + userArray.local.id + ']').removeClass('silenced');
+				}
+
+
+			// add/remove sandboxed class to stream items and profile cards
+			if(userArray.local.is_sandboxed === true) {
+				$('.stream-item[data-user-id=' + userArray.local.id + ']').addClass('sandboxed');
+				$('.profile-card .profile-header-inner[data-user-id=' + userArray.local.id + ']').addClass('sandboxed');
+				$('.user-menu-cog[data-user-id=' + userArray.local.id + ']').addClass('sandboxed');
+				}
+			else {
+				$('.stream-item[data-user-id=' + userArray.local.id + ']').removeClass('sandboxed')
+				$('.profile-card .profile-header-inner[data-user-id=' + userArray.local.id + ']').removeClass('sandboxed');
+				$('.user-menu-cog[data-user-id=' + userArray.local.id + ']').removeClass('sandboxed');
+				}
+
+			// profile size avatars (notices, users)
+			$.each($('img.avatar.profile-size[data-user-id="' + userArray.local.id + '"]'),function(){
+				if($(this).attr('src') != userArray.local.profile_image_url_profile_size) {
+					$(this).attr('src',userArray.local.profile_image_url_profile_size);
+					}
+				});
+
+			// standard size avatars (notifications)
+			$.each($('img.avatar.standard-size[data-user-id="' + userArray.local.id + '"]'),function(){
+				if($(this).attr('src') != userArray.local.profile_image_url) {
+					$(this).attr('src',userArray.local.profile_image_url);
+					}
+				});
+
+			// full names
+			$.each($('strong.name[data-user-id="' + userArray.local.id + '"],\
+					  .fullname[data-user-id="' + userArray.local.id + '"]'),function(){
+				if($(this).html() != userArray.local.name) {
+					$(this).html(userArray.local.name);
+					}
+				});
+
+			// user/screen names
+			$.each($('.screen-name[data-user-id="' + userArray.local.id + '"]'),function(){
+				if($(this).html().substring(1) != userArray.local.screen_name) {
+					$(this).html('@' + userArray.local.screen_name);
+					}
+				});
+
+			// profile urls
+			// try to find the last account group with this id, if the statusnet_profile_url seems to
+			// be changed we replace it wherever we can find it, even in list urls etc that starts with statusnet_profile_url
+			if($('a.account-group[data-user-id="' + userArray.local.id + '"]').last().attr('href') != userArray.local.statusnet_profile_url) {
+				var oldStatusnetProfileURL = $('a.account-group[data-user-id="' + userArray.local.id + '"]').last().attr('href');
+				// all links with the exact statusnet_profile_url
+				$.each($('[href="' + oldStatusnetProfileURL + '"]'),function(){
+					$(this).attr('href',userArray.local.statusnet_profile_url);
+					});
+				// links starting with statusnet_profile_url
+				$.each($('[href*="' + oldStatusnetProfileURL + '/"]'),function(){
+					$(this).attr('href',$(this).attr('href').replace(oldStatusnetProfileURL + '/',userArray.local.statusnet_profile_url + '/'));
+					});
+				}
+
+			// cover photos
+			$.each($('.profile-header-inner[data-user-id="' + userArray.local.id + '"]'),function(){
+				if($(this).css('background-image') != 'url("' + userArray.local.cover_photo + '")' && userArray.local.cover_photo != false) {
+					$(this).css('background-image','url("' + userArray.local.cover_photo + '")');
+					}
+				});
+
+			// the window.following object might need updating also
+			if(typeof window.following != 'undefined' && typeof window.following[userArray.local.id] != 'undefined') {
+				if(window.following[userArray.local.id].avatar != userArray.local.profile_image_url) {
+					window.following[userArray.local.id].avatar = userArray.local.profile_image_url;
+					}
+				if(window.following[userArray.local.id].name != userArray.local.name) {
+					window.following[userArray.local.id].name = userArray.local.name;
+					}
+				if(window.following[userArray.local.id].username != userArray.local.screen_name) {
+					window.following[userArray.local.id].username = userArray.local.screen_name;
+					}
+				}
+
+			}
+		});
+	}
+
+/* ·
+   ·
+   ·   Iterates recursively through an API response in search for updated notice data
+   ·   If we find a "repeated" key we assume the parent is a notice object (chosen arbitrary)
+   ·
+   · · · · · · · · · · · · · */
+
+window.knownDeletedNotices = new Object();
+function searchForUpdatedNoticeData(obj) {
+	var streamItemsUpdated = false;
+	for (var property in obj) {
+		if (obj.hasOwnProperty(property)) {
+			if (typeof obj[property] == "object") {
+				searchForUpdatedNoticeData(obj[property]);
+				}
+			else if(typeof obj[property] == 'boolean' && property == 'repeated') {
+				var streamItemFoundInFeed = $('.stream-item[data-conversation-id][data-quitter-id="' + obj.id + '"]'); // data-conversation-id identifies it as a notice, not a user or something
+
+				// if this is a special qvitter-delete-notice activity notice it means we try to hide
+				// the deleted notice from our stream
+	            // the uri is in the obj.text var, between the double curly brackets
+				if(typeof obj.qvitter_delete_notice != 'undefined' && obj.qvitter_delete_notice == true) {
+					var uriToHide = obj.text.substring(obj.text.indexOf('{{')+2,obj.text.indexOf('}}'));
+					window.knownDeletedNotices[uriToHide] = true;
+	                var streamItemToHide = $('.stream-item[data-uri="' + uriToHide + '"]');
+					slideUpAndRemoveStreamItem(streamItemToHide);
+					streamItemsUpdated = true;
+					}
+				// if this is not a delete notice it means the notice exists and is not deleted,
+				// correct any notices that are marked as unrepeated, they might have
+				// been marked like that by mistake (i.e. a bug...)
+				else if(streamItemFoundInFeed.hasClass('unrepeated')) {
+					streamItemFoundInFeed.removeClass('unrepeated always-hidden');
+					streamItemsUpdated = true;
+					}
+
+				// ordinary notices
+				else if(streamItemFoundInFeed.length>0) {
+
+					var queetFoundInFeed = streamItemFoundInFeed.children('.queet');
+					var queetID = streamItemFoundInFeed.attr('data-quitter-id');
+
+					// sometimes activity notices don't get the is_activity flag set to true
+					// maybe because they were in the process of being saved when
+					// we first got them
+					if(obj.is_post_verb === false) {
+						streamItemFoundInFeed.addClass('activity always-hidden');
+						streamItemsUpdated = true;
+						}
+
+					// update the avatar row if the queet is expanded and the numbers are not the same
+					if(streamItemFoundInFeed.hasClass('expanded')) {
+						var oldFavNum = parseInt(queetFoundInFeed.find('.action-fav-num').text(),10);
+						var oldRQNum = parseInt(queetFoundInFeed.find('.action-rq-num').text(),10);
+						if(oldFavNum != obj.fave_num || oldRQNum != obj.repeat_num) {
+							getFavsAndRequeetsForQueet(streamItemFoundInFeed, queetID);
+							}
+						}
+
+					// attachments might have been added/changed/have had time to be processed
+					if(queetFoundInFeed.children('script.attachment-json').text() != JSON.stringify(obj.attachments)) {
+						if(queetFoundInFeed.children('script.attachment-json').length == 0) {
+							queetFoundInFeed.prepend('<script class="attachment-json" type="application/json">' + JSON.stringify(obj.attachments) + '</script>');
+							}
+						else {
+							queetFoundInFeed.children('script.attachment-json').text(JSON.stringify(obj.attachments));
+							}
+						var attachmentsHTMLBuild = buildAttachmentHTML(obj.attachments);
+						var thumbsIsHidden = false;
+						if(queetFoundInFeed.find('.queet-thumbs').hasClass('hide-thumbs')) {
+							var thumbsIsHidden = true;
+							}
+						queetFoundInFeed.find('.queet-thumbs').remove();
+						queetFoundInFeed.find('.oembed-data').remove();
+						placeQuotedNoticesInQueetText(attachmentsHTMLBuild.quotedNotices,queetFoundInFeed.find('.queet-text'));
+						// we might want to hide urls (rendered as attachments) in the queet text
+						$.each(queetFoundInFeed.find('.queet-text').find('a'),function(){
+							if(attachmentsHTMLBuild.urlsToHide.indexOf($(this).text()) > -1) {
+								$(this).removeAttr('style'); // temporary fix
+								$(this).addClass('hidden-embedded-link-in-queet-text');
+								}
+							});
+						queetFoundInFeed.find('.queet-text').after(attachmentsHTMLBuild.html);
+						if(thumbsIsHidden) {
+							queetFoundInFeed.find('.queet-thumbs').addClass('hide-thumbs');
+							}
+						streamItemsUpdated = true;
+						}
+
+					// attentions might have been added to a notice
+					if(queetFoundInFeed.children('script.attentions-json').text() != JSON.stringify(obj.attentions)) {
+						if(queetFoundInFeed.children('script.attentions-json').length == 0) {
+							queetFoundInFeed.prepend('<script class="attentions-json" type="application/json">' + JSON.stringify(obj.attentions) + '</script>');
+							}
+						else {
+							queetFoundInFeed.children('script.attentions-json').text(JSON.stringify(obj.attentions));
+							}
+						}
+
+					// set favorite data
+					queetFoundInFeed.find('.action-fav-num').attr('data-fav-num',obj.fave_num);
+					queetFoundInFeed.find('.action-fav-num').html(obj.fave_num);
+					if(obj.favorited) {
+						streamItemFoundInFeed.addClass('favorited');
+						queetFoundInFeed.find('.action-fav-container').children('.with-icn').addClass('done');
+						queetFoundInFeed.find('.action-fav-container').find('.icon.sm-fav').attr('data-tooltip',window.sL.favoritedVerb);
+						streamItemsUpdated = true;
+						}
+					else {
+						streamItemFoundInFeed.removeClass('favorited');
+						queetFoundInFeed.find('.action-fav-container').children('.with-icn').removeClass('done');
+						queetFoundInFeed.find('.action-fav-container').find('.icon.sm-fav').attr('data-tooltip',window.sL.favoriteVerb);
+						streamItemsUpdated = true;
+						}
+
+					// set repeat data
+					queetFoundInFeed.find('.action-rq-num').attr('data-rq-num',obj.repeat_num);
+					queetFoundInFeed.find('.action-rq-num').html(obj.repeat_num);
+					if(obj.repeated) {
+						streamItemFoundInFeed.addClass('requeeted');
+						queetFoundInFeed.find('.action-rt-container').children('.with-icn').addClass('done');
+						queetFoundInFeed.find('.action-rt-container').find('.icon.sm-rt').attr('data-tooltip',window.sL.requeetedVerb);
+						streamItemFoundInFeed.attr('data-requeeted-by-me-id',obj.repeated_id);
+						streamItemsUpdated = true;
+						}
+					else {
+						streamItemFoundInFeed.removeClass('requeeted');
+						queetFoundInFeed.find('.action-rt-container').children('.with-icn').removeClass('done');
+						queetFoundInFeed.find('.action-rt-container').find('.icon.sm-rt').attr('data-tooltip',window.sL.requeetVerb);
+						streamItemFoundInFeed.removeAttr('data-requeeted-by-me-id');
+						streamItemsUpdated = true;
+						}
+					}
+				}
+			}
+		}
+	if(streamItemsUpdated) {
+		// TODO, create a queue that runs with setInterval instead, say every 5 s,
+		// that way we can run rememberStreamStateInLocalStorage() in the background,
+		// and don't slow down stream change etc
+		// rememberStreamStateInLocalStorage();
+		}
+	}
+
+
+/* ·
+   ·
+   ·  Removes a deleted stream item from the feed gracefully, if not already hidden
+   ·
+   · · · · · · · · · */
+
+function slideUpAndRemoveStreamItem(streamItem,callback) {
+	if(streamItem.length>0 && !streamItem.hasClass('always-hidden')) {
+		streamItem.animate({opacity:'0.2'},1000,'linear',function(){
+			$(this).css('height',$(this).height() + 'px');
+			$(this).animate({height:'0px'},500,'linear',function(){
+				$(this).addClass('deleted always-hidden');
+				rememberStreamStateInLocalStorage();
+				if(typeof callback == 'function') {
+					callback();
+					}
+				});
+			});
+		}
+	}
+
+/* ·
+   ·
+   ·  Store the current stream's state (html) in localStorage (if we're logged in)
+   ·
+   · · · · · · · · · */
+
+
+function rememberStreamStateInLocalStorage() {
+	if(typeof window.currentStreamObject != 'undefined') {
+
+		// don't store expanded content, only store profile card and the top 20 visible stream-items
+		var firstTwentyVisibleHTML = '';
+		var i = 0;
+		$.each($('#feed-body').children('.stream-item'),function(k,streamItem){
+			firstTwentyVisibleHTML += $(streamItem).outerHTML();
+			if(!$(streamItem).hasClass('always-hidden')) {
+				i++;
+				}
+			if(i>20) {
+				return false;
+				}
+			});
+
+		var feed = $('<div/>').append(firstTwentyVisibleHTML);
+
+		// we add some of these things again when the notices are fetched from the cache
+		cleanStreamItemsFromClassesAndConversationElements(feed);
+
+		var feedHtml = feed.html();
+		var profileCardHtml = $('#feed').siblings('.profile-card').outerHTML();
+		var streamData = {
+			card: profileCardHtml,
+			feed: feedHtml
+			};
+
+		localStorageObjectCache_STORE('streamState',window.currentStreamObject.path, streamData);
+		}
+	}
+
+/* ·
+   ·
+   ·   Clean stream items from classes and conversation elements,
+   ·   to use e.g. for caching and including in popup footers
+   ·
+   ·   @param streamItems: jQuery object with stream items as children
+   ·
+   · · · · · · · · · */
+
+function cleanStreamItemsFromClassesAndConversationElements(streamItems) {
+	streamItems.children('.stream-item').removeClass('profile-blocked-by-me');
+	streamItems.children('.stream-item').children('.queet').removeAttr('data-tooltip'); // can contain tooltip about blocked user
+
+	streamItems.find('.temp-post').remove();
+	streamItems.children('.stream-item').removeClass('not-seen');
+	streamItems.children('.stream-item').removeClass('hidden-repeat'); // this means we need hide repeats when adding cached notices to feed later
+	streamItems.children('.stream-item').removeClass('selected-by-keyboard');
+	streamItems.find('.dropdown-menu').remove();
+	streamItems.find('.stream-item').removeClass('expanded').removeClass('next-expanded').removeClass('hidden').removeClass('collapsing').addClass('visible');
+	streamItems.children('.stream-item').each(function() {
+		cleanUpAfterCollapseQueet($(this));
+		});
+	}
+
+
+/* ·
+   ·
+   ·   Hide all instances (repeats) of a notice but the first/oldest one
+   ·
+   ·   @param streamItems: jQuery object with stream items as children
+   ·
+   · · · · · · · · · */
+
+function hideAllButOldestInstanceOfStreamItem(streamItemContainer) {
+	streamItemContainer.children('.stream-item').each(function(){
+		// if this stream item have siblings _after_ it, with the same id, hide it!
+		if($(this).nextAll('.stream-item[data-quitter-id="' + $(this).attr('data-quitter-id') + '"]').length > 0) {
+			$(this).addClass('hidden-repeat');
+			}
+		});
+	return streamItemContainer;
+	}
+
+
+
+/* ·
+   ·
+   ·  Gets the full unshortened HTML for a queet
+   ·
+   · · · · · · · · · */
+
+function getFullUnshortenedHtmlForQueet(streamItem, cacheOnly) {
+	if(typeof cacheOnly == 'undefined') {
+		var cacheOnly = false;
+		}
+	var queet = streamItem.children('.queet');
+	var queetId = streamItem.attr('data-quitter-id');
+	var attachmentMore = queet.find('span.attachment.more');
+	// only if actually shortened
+	if(attachmentMore.length>0
+	&& queet.children('script.attachment-json').length > 0
+	&& queet.children('script.attachment-json').text() != 'undefined') {
+		// first try localstorage cache
+		var cacheData = localStorageObjectCache_GET('fullQueetHtml',queetId);
+		if(cacheData) {
+			queet.find('.queet-text').html(cacheData);
+			queet.outerHTML(detectRTL(queet.outerHTML()));
+			}
+		// then try static html file attachment, that we should have in the attachment-json script element
+		else if(cacheOnly === false){
+			var attachmentId = attachmentMore.attr('data-attachment-id');
+			$.each(JSON.parse(queet.children('script.attachment-json').text()), function(k,attachment) {
+				if(attachment.id == attachmentId) {
+					$.get(attachment.url,function(data){
+						if(data) {
+							// get body and store in localStorage
+							var bodyHtml = $('<html/>').html(data).find('body').html();
+							localStorageObjectCache_STORE('fullQueetHtml',queetId,bodyHtml);
+							queet.find('.queet-text').html($.trim(bodyHtml));
+							queet.outerHTML(detectRTL(queet.outerHTML()));
+							}
+						});
+					return false;
+					}
+				});
+			}
+		}
+	}
+
+/* ·
+   ·
    ·  Appends a user to the array containing the mentions suggestions to show when typing a notice
    ·
    · · · · · · · · · */
 
 function appendUserToMentionsSuggestionsArray(user) {
 
-	var userAlreadyExist = false;
-	$.each(window.following, function(){
-		if(user.id == this.id) {
-			userAlreadyExist = true;
-			}
-		});
-
-	if(!userAlreadyExist) {
+	if(typeof window.following[user.id] == 'undefined') {
 
 		// in the window.following array, we use "false" as url if it's a user from this instance
 		if(user.is_local) {
@@ -440,19 +1587,52 @@ function appendUserToMentionsSuggestionsArray(user) {
 			var url = guessInstanceUrlWithoutProtocolFromProfileUrlAndNickname(user.statusnet_profile_url,user.screen_name);
 			}
 
-		var userToAdd = Object();
-		userToAdd.avatar = user.profile_image_url;
-		userToAdd.id = user.id;
-		userToAdd.name = user.name;
-		userToAdd.url = url;
-		userToAdd.username = user.screen_name;
+		var userToAdd = {
+			avatar: user.profile_image_url,
+			id: user.id,
+			name: user.name,
+			url: url,
+			username: user.screen_name
+			};
 
-		window.following.push(userToAdd);
+		window.following[user.id] = userToAdd;
 		}
 
 	}
 
 
+/* ·
+   ·
+   ·  Is a profile pref in the qvitter namespace enabled?
+   ·
+   · · · · · · · · · */
+
+function isQvitterProfilePrefEnabled(topic) {
+	if(typeof window.qvitterProfilePrefs != 'undefined' && typeof window.qvitterProfilePrefs[topic] != 'undefined'
+		&& window.qvitterProfilePrefs[topic] !== null
+		&& window.qvitterProfilePrefs[topic] != ''
+		&& window.qvitterProfilePrefs[topic] !== false
+		&& window.qvitterProfilePrefs[topic] != 0
+		&& window.qvitterProfilePrefs[topic] != '0') {
+		return true;
+		}
+	return false;
+	}
+
+/* ·
+   ·
+   ·  Is this user muted?
+   ·
+   · · · · · · · · · */
+
+function isUserMuted(userID) {
+	if(isQvitterProfilePrefEnabled('mute:' + userID)) {
+		return true;
+		}
+	else {
+		return false;
+		}
+	}
 
 
 /* ·
@@ -464,42 +1644,29 @@ function appendUserToMentionsSuggestionsArray(user) {
 function displayOrHideUnreadNotifications(notifications) {
 
 		var data = $.parseJSON(notifications);
+		var totNotif = 0;
 
-		// if this is notifications page, we use the info from the hidden items in the feed
-		if(window.currentStream == 'qvitter/statuses/notifications.json') {
-			var new_queets_num = $('#feed-body').find('.stream-item.notification.hidden').length;
-
-			if(new_queets_num == 0) {
-				document.title = window.siteTitle;
-				$('#unseen-notifications').hide();
-				}
-			else {
-				document.title = window.siteTitle + ' (' + new_queets_num + ')';
-				$('#unseen-notifications').html(new_queets_num);
-				$('#unseen-notifications').show();
-				}
-			}
-		// all other pages use the header info
-		else if(data === null || typeof data == 'undefined' || data.length == 0) {
-			$('#unseen-notifications').hide();
-			document.title = window.siteTitle;
-			}
-		else {
-
-			var totNotif = 0;
+		if(data !== null && typeof data != 'undefined') {
 			$.each(data,function(k,v){
 				totNotif = totNotif + parseInt(v,10);
 				});
+			}
 
-			if(totNotif>0) {
-				$('#unseen-notifications').html(totNotif);
-				document.title = window.siteTitle + ' (' + totNotif + ')'; // update html page title
-				$('#unseen-notifications').show();
+		if(window.currentStreamObject.name == 'notifications') {
+			var hiddenNotifications = $('#feed-body').find('.stream-item.hidden:not(.always-hidden)').length;
+			if(hiddenNotifications>0) {
+				totNotif = totNotif + hiddenNotifications;
 				}
-			else {
-				$('#unseen-notifications').hide();
-				document.title = window.siteTitle;
-				}
+			}
+
+		if(totNotif>0) {
+			$('#unseen-notifications').html(totNotif);
+			document.title = '(' + totNotif + ') ' + window.siteTitle; // update html page title
+			$('#unseen-notifications').show();
+			}
+		else {
+			$('#unseen-notifications').hide();
+			document.title = window.siteTitle;
 			}
 
 	}
@@ -523,7 +1690,10 @@ function iterateRecursiveReplaceHtmlSpecialChars(obj) {
 			if (typeof obj[property] == "object") {
 				iterateRecursiveReplaceHtmlSpecialChars(obj[property]);
 				}
-			else if(typeof obj[property] == 'string' && property != 'statusnet_html' && property != 'source') {
+			else if(typeof obj[property] == 'string'
+			&& property != 'statusnet_html'
+			&& property != 'oembedHTML' // we trust this to be cleaned server side
+			&& property != 'source') {
 				obj[property] = replaceHtmlSpecialChars(obj[property]);
 				}
 			}
@@ -531,6 +1701,12 @@ function iterateRecursiveReplaceHtmlSpecialChars(obj) {
 	return obj;
 	}
 function replaceHtmlSpecialChars(text) {
+
+	// don't do anything if the text is undefined
+	if(typeof text == 'undefined') {
+		return text;
+		}
+
 	var map = {
 		'&': '&amp;',
 		'<': '&lt;',
@@ -539,27 +1715,6 @@ function replaceHtmlSpecialChars(text) {
 		"'": '&#039;'
 		};
 	return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-	}
-
-/* ·
-   ·
-   ·   Checks if localstorage is availible
-   ·
-   ·   We can't just do if(typeof localStorage.selectedLanguage != 'undefined')
-   ·   because firefox with cookies disabled then freaks out and stops executing js completely
-   ·
-   · · · · · · · · · */
-
-function localStorageIsEnabled() {
-	var mod = 'test';
-	try {
-		localStorage.setItem(mod, mod);
-		localStorage.removeItem(mod);
-		return true;
-		}
-	catch(e) {
-		return false;
-		}
 	}
 
 
@@ -591,7 +1746,7 @@ function validateRegisterForm(o) {
 	if(fullname.val().length < 255) {
 		fullname.removeClass('invalid'); } else { fullname.addClass('invalid'); if(allFieldsValid)allFieldsValid=false; }
 
-	if(/^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(email.val())) {
+	if(validEmail(email.val())) {
 		email.removeClass('invalid'); } else { email.addClass('invalid'); if(allFieldsValid)allFieldsValid=false; }
 
 	if($.trim(homepage.val()).length==0 || /^(ftp|http|https):\/\/[^ "]+$/.test(homepage.val())) {
@@ -607,6 +1762,15 @@ function validateRegisterForm(o) {
 		passwords.removeClass('invalid'); } else { passwords.addClass('invalid'); if(allFieldsValid)allFieldsValid=false; }
 
 	return allFieldsValid;
+	}
+
+function validEmail(email) {
+	if(/^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(email)) {
+		return true;
+		}
+	else {
+		return false;
+		}
 	}
 
 /* ·
@@ -677,7 +1841,8 @@ function isValidHexColor(maybeValidHexColor) {
 function changeDesign(obj) {
 
 	// if we're logged out and this is the front page, we use the default design
-	if(!window.loggedIn && window.currentStream == 'statuses/public_timeline.json') {
+	if(!window.loggedIn &&
+	(window.currentStreamObject.name == 'public timeline' || window.currentStreamObject.name == 'public and external timeline')) {
 		obj.backgroundimage = window.fullUrlToThisQvitterApp + window.siteBackground;
 		obj.backgroundcolor = window.defaultBackgroundColor;
 		obj.linkcolor = window.defaultLinkColor;
@@ -690,8 +1855,8 @@ function changeDesign(obj) {
 		}
 
 	// remember the design for this stream
-	if(typeof window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)] == 'undefined') {
-		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)] = new Object();
+	if(typeof window.oldStreamsDesigns[window.currentStreamObject.nickname] == 'undefined') {
+		window.oldStreamsDesigns[window.currentStreamObject.nickname] = new Object();
 		}
 
 	// change design elements
@@ -702,21 +1867,21 @@ function changeDesign(obj) {
 		else if(obj.backgroundimage.length > 4) {
 			$('body').css('background-image','url(\'' + obj.backgroundimage + '\')');
 			}
-		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)].backgroundimage = obj.backgroundimage;
+		window.oldStreamsDesigns[window.currentStreamObject.nickname].backgroundimage = obj.backgroundimage;
 		}
 	if(typeof obj.backgroundcolor != 'undefined') {
 		if(obj.backgroundcolor === false || obj.backgroundcolor == '') {
 			obj.backgroundcolor = window.defaultBackgroundColor;
 			}
 		changeBackgroundColor(obj.backgroundcolor);
-		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)].backgroundcolor = obj.backgroundcolor;
+		window.oldStreamsDesigns[window.currentStreamObject.nickname].backgroundcolor = obj.backgroundcolor;
 		}
 	if(typeof obj.linkcolor != 'undefined') {
 		if(obj.linkcolor === false || obj.linkcolor == '') {
 			obj.linkcolor = window.defaultLinkColor;
 			}
 		changeLinkColor(obj.linkcolor);
-		window.oldStreamsDesigns[theUserOrGroupThisStreamBelongsTo(window.currentStream)].linkcolor = obj.linkcolor;
+		window.oldStreamsDesigns[window.currentStreamObject.nickname].linkcolor = obj.linkcolor;
 		}
 	}
 
@@ -831,19 +1996,19 @@ function detectRTL(s) {
     	$streamItem.children('.stream-item').children('.queet').addClass('rtl');
     	}
     else {
-		// for ltr languages we move @, ! and # to inside
-    	$streamItem.find('.queet-text').find('.h-card.mention').prepend('@');
-    	$streamItem.find('.queet-text').find('.h-card.group').prepend('!');
-    	$streamItem.find('.queet-text').find('.vcard .fn.nickname').prepend('@'); // very old style
-      $streamItem.find('.queet-text').find('.vcard .nickname.mention:not(.fn)').prepend('@'); // old style
-    	$streamItem.find('.queet-text').find('.vcard .nickname.group').prepend('!'); // old style
-    	$streamItem.find('.queet-text').find('a[rel="tag"]').prepend('#');
+		// for ltr languages we move @, ! and # to inside (only because it looks better)
+    	prependCharIfItDoesntAlreadyExist($streamItem.find('.queet-text').find('.h-card.mention'),'@');
+		prependCharIfItDoesntAlreadyExist($streamItem.find('.queet-text').find('.h-card.group'),'!');
+		prependCharIfItDoesntAlreadyExist($streamItem.find('.queet-text').find('.vcard .fn.nickname:not(.group)'),'@'); // very old style
+		prependCharIfItDoesntAlreadyExist($streamItem.find('.queet-text').find('.vcard .nickname.mention:not(.fn)'),'@'); // old style
+		prependCharIfItDoesntAlreadyExist($streamItem.find('.queet-text').find('.vcard .nickname.group'),'!'); // old style
+		prependCharIfItDoesntAlreadyExist($streamItem.find('.queet-text').find('a[rel="tag"]'),'#');
     	}
 
 	// we remove @, ! and #, they are added as pseudo elements, or have been moved to the inside
    	return $streamItem.html().replace(/@<a/gi,'<a').replace(/!<a/gi,'<a').replace(/@<span class="vcard">/gi,'<span class="vcard">').replace(/!<span class="vcard">/gi,'<span class="vcard">').replace(/#<span class="tag">/gi,'<span class="tag">');
 	}
-<<<<<<< HEAD
+
 	
 function secondsToTime(s){
     var h  = Math.floor( s / ( 60 * 60 ) );
@@ -858,15 +2023,17 @@ function secondsToTime(s){
     };
 }	
 	
-/* · 
-   · 
-=======
+
+function prependCharIfItDoesntAlreadyExist(jQueryObject,char) {
+	if(jQueryObject.text().substring(0,1) != char) {
+		jQueryObject.prepend(char);
+		}
+	}
 
 
 
 /* ·
    ·
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
    ·   Takes twitter style dates and converts them
    ·
    ·   @param tdate: date in the form of e.g. 'Mon Aug 05 16:30:22 +0200 2013'
@@ -891,7 +2058,7 @@ function parseTwitterDate(tdate) {
 	month_names[month_names.length] = window.sL.shortmonthsOctober
 	month_names[month_names.length] = window.sL.shortmonthsNovember
 	month_names[month_names.length] = window.sL.shortmonthsDecember
-    var system_date = new Date(Date.parse(tdate));
+    var system_date = parseDate(tdate);
     var user_date = new Date();
     var diff = Math.floor((user_date - system_date) / 1000);
     var hms = secondsToTime(diff)
@@ -917,7 +2084,7 @@ function parseTwitterLongDate(tdate) {
 	month_names[month_names.length] = window.sL.longmonthsOctober
 	month_names[month_names.length] = window.sL.longmonthsNovember
 	month_names[month_names.length] = window.sL.longmonthsDecember
-    var system_date = new Date(Date.parse(tdate));
+    var system_date = parseDate(tdate);
 	var hours = system_date.getHours();
 	var minutes = ('0'+system_date.getMinutes()).slice(-2);
 	var ampm = hours >= 12 ? 'pm' : 'am';
@@ -941,6 +2108,12 @@ function timestampToTwitterDate(timestamp) {
 	 var sec = (a.getUTCSeconds()<10?'0':'')+a.getUTCSeconds();
 	 return day+' '+month+' '+date+' '+hour+':'+min+':'+sec+' +0000 '+year;
 	 }
+function parseDate(str) {
+ 	if(typeof str != 'undefined') {
+		var v=str.split(' ');
+	 	return new Date(Date.parse(v[1]+" "+v[2]+", "+v[5]+" "+v[3]+" "+v[4]));
+		}
+	}
 
 
 
@@ -962,32 +2135,6 @@ function convertEmptyObjectToEmptyArray(data) {
 		return data;
 		}
 
-	}
-
-
-
-
-/* ·
-   ·
-   ·   Return all URL:s in a string
-   ·
-   ·   @param string: the string to search
-   ·
-   ·   @return an array with the found urls
-   ·
-   · · · · · · · · · · */
-
-function findUrls(text) {
-    var source = (text || '').toString();
-    var urlArray = [];
-    var url;
-    var matchArray;
-    var regexToken = /(((ftp|https?):\/\/)[\-\w@:%_\+.~#?,&\/\/=]+)|((mailto:)?[_.\w-]+@([\w][\w\-]+\.)+[a-zA-Z]{2,3})/g;
-    while( (matchArray = regexToken.exec( source )) !== null ) {
-        var token = matchArray[0];
-        urlArray.push( token );
-	    }
-    return urlArray;
 	}
 
 
@@ -1056,6 +2203,49 @@ function convertAttachmentMoreHref() {
 
 
 
+
+/* ·
+   ·
+   ·   Saves the user's bookmarks to the server
+   ·
+   · · · · · · · · · · · · · */
+
+function saveAllBookmarks() {
+	var i=0;
+	var bookmarkContainer = new Object();
+	$.each($('#bookmark-container .stream-selection'), function(key,obj) {
+		bookmarkContainer[i] = new Object();
+		bookmarkContainer[i].dataStreamHref = $(obj).attr('href');
+		bookmarkContainer[i].dataStreamHeader = $(obj).text();
+		i++;
+		});
+
+	postUpdateBookmarks(bookmarkContainer);
+
+	$('#bookmark-container').sortable({delay: 100});
+	$('#bookmark-container').disableSelection();
+	}
+
+
+/* ·
+   ·
+   ·   Append all bookmarks to the bookmark container
+   ·
+   · · · · · · · · · · · · · */
+
+function appendAllBookmarks(bookmarkContainer) {
+	if(typeof bookmarkContainer != 'undefined' && bookmarkContainer) {
+		$('#bookmark-container').html('');
+		var bookmarkContainerParsed = JSON.parse(bookmarkContainer);
+		$.each(bookmarkContainerParsed, function(key,obj) {
+			$('#bookmark-container').append('<a class="stream-selection" href="' + obj.dataStreamHref + '">' + obj.dataStreamHeader + '<i class="chev-right" data-tooltip="' + window.sL.tooltipRemoveBookmark + '"></i></a>');
+			});
+		}
+	$('#bookmark-container').sortable({delay: 100});
+	$('#bookmark-container').disableSelection();
+	}
+
+
 /* ·
    ·
    ·   Updates the browsing history local storage
@@ -1069,7 +2259,7 @@ function updateHistoryLocalStorage() {
 		$.each($('#history-container .stream-selection'), function(key,obj) {
 			historyContainer[i] = new Object();
 			historyContainer[i].dataStreamHref = $(obj).attr('href');
-			historyContainer[i].dataStreamHeader = $(obj).attr('data-stream-header');
+			historyContainer[i].dataStreamHeader = $(obj).text();
 			i++;
 			});
 		localStorageObjectCache_STORE('browsingHistory', window.loggedIn.screen_name,historyContainer);
@@ -1079,8 +2269,6 @@ function updateHistoryLocalStorage() {
 		else {
 			$('#history-container').css('display','block');
 			}
-		$('#history-container').sortable({delay: 100});
-		$('#history-container').disableSelection();
 		}
 	}
 
@@ -1098,7 +2286,8 @@ function loadHistoryFromLocalStorage() {
 			$('#history-container').css('display','block');
 			$('#history-container').html('');
 			$.each(cacheData, function(key,obj) {
-				$('#history-container').append('<a class="stream-selection" data-stream-header="' + obj.dataStreamHeader + '" href="' + obj.dataStreamHref + '">' + obj.dataStreamHeader + '</i><i class="chev-right"></i></a>');
+				var streamHeader = replaceHtmlSpecialChars(obj.dataStreamHeader); // because we're pulling the header with jQuery.text() before saving in localstorage, which unescapes our escaped html
+				$('#history-container').append('<a class="stream-selection" href="' + obj.dataStreamHref + '">' + streamHeader + '<i class="chev-right" data-tooltip="' + window.sL.tooltipBookmarkStream + '"></i></a>');
 				});
 			}
 		updateHistoryLocalStorage();
@@ -1201,6 +2390,26 @@ function countCharsInQueetBox(src,trgt,btn) {
 			btn.addClass('disabled');
 			}
 		}
+	}
+
+
+/* ·
+   ·
+   ·   Prefill the queet box with cached text, if there is any in an attribute
+   ·
+   ·   @param queetBox: jQuery object for the queet box
+   ·
+   · · · · · · · · · · · · · */
+
+function maybePrefillQueetBoxWithCachedText(queetBox) {
+    var cachedText = decodeURIComponent(queetBox.attr('data-cached-text'));
+    var cachedTextText = $('<div/>').html(cachedText).text();
+    if(cachedText != 'undefined' && cachedText != 'false') {
+        queetBox.click();
+        queetBox.html(cachedText);
+        setSelectionRange(queetBox[0], cachedTextText.length, cachedTextText.length);
+        queetBox.trigger('input');
+        }
 	}
 
 
@@ -1313,6 +2522,17 @@ jQuery.fn.outerHTML = function(s) {
 };
 
 
+
+/* ·
+   ·
+   ·   Sort divs by attribute descending
+   ·
+   · · · · · · · · · · · · · */
+
+jQuery.fn.sortDivsByAttrDesc = function sortDivsByAttrDesc(attr) {
+    $("> div", this[0]).sort(dec_sort).appendTo(this[0]);
+    function dec_sort(a, b){ return parseInt($(b).attr(attr),10) > parseInt($(a).attr(attr),10) ? 1 : -1; }
+}
 
 
 /* ·
@@ -1438,28 +2658,7 @@ function deleteBetweenCharacterIndices(el, from, to) {
    · · · · · · · · · · · · · */
 
 function shortenUrlsInBox(shortenButton) {
-<<<<<<< HEAD
-        shortenButton.addClass('disabled');
 
-        $.each(shortenButton.parent().parent().siblings('.syntax-middle').find('span.url'),function(key,obj){
-
-                var url = $.trim($(obj).text());
-
-                display_spinner();
-
-                $.ajax({ url: window.urlShortenerAPIURL + '?format=jsonp&action=shorturl&signature=' + window.urlShortenerSignature + '&url=' + encodeURIComponent(url), type: "GET", dataType: "jsonp", success: function(data) {
-
-                        if(typeof data.shorturl != 'undefined') {
-
-                                shortenButton.closest('.queet-toolbar').siblings('.upload-image-container').children('img[data-shorturl="' + data.url.url + '"]').attr('data-shorturl',data.shorturl);
-                                shortenButton.parent().parent().siblings('.queet-box-syntax').html(shortenButton.parent().parent().siblings('.queet-box-syntax').html().replace($('<div/>').text(data.url.url).html(), data.shorturl));
-                                shortenButton.parent().parent().siblings('.queet-box-syntax').trigger('keyup');
-                                shortenButton.addClass('disabled'); // make sure the button is disabled right after
-                                }
-                        remove_spinner();
-                        }});
-                });
-=======
 	shortenButton.addClass('disabled');
 
 	$.each(shortenButton.parent().parent().siblings('.syntax-middle').find('span.url'),function(key,obj){
@@ -1486,41 +2685,188 @@ function shortenUrlsInBox(shortenButton) {
 				}
 			});
 		});
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
-}
+	}
+
+
 
 /* ·
    ·
-   ·   Return the user screen name that this stream belongs to. last resort just return the stream
+   ·   Youtube ID from Youtube URL
    ·
    · · · · · · · · · · · · · */
 
-function theUserOrGroupThisStreamBelongsTo(stream) {
-	// if screen_name is given as get-var, use that
-	if(stream.indexOf('screen_name=')>-1) {
-		var thisUsersScreenName = stream.substring(stream.indexOf('screen_name=')+12);
-		if(thisUsersScreenName.indexOf('&=')>-1) {
-			thisUsersScreenName = thisUsersScreenName.substring(0,stream.indexOf('&'));
-			}
-		return thisUsersScreenName;
-		}
-	// 	groups
-	else if(stream.indexOf('statusnet/groups/timeline/')>-1
-	     || stream.indexOf('statusnet/groups/membership/')>-1
-	     || stream.indexOf('statusnet/groups/admins/')>-1) {
-		var groupName = '!' + stream.substring(stream.lastIndexOf('/')+1, stream.indexOf('.json'));
-		return groupName;
-		}
-	// otherwise, and if we're logged in, we assume this is my stream
-	else if (window.loggedIn){
-		return window.loggedIn.screen_name;
-		}
-	else {
-		return stream;
-		}
+function youTubeIDFromYouTubeURL(url) {
+	return url.replace('https://youtube.com/watch?v=','').replace('http://youtube.com/watch?v=','').replace('http://www.youtube.com/watch?v=','').replace('https://www.youtube.com/watch?v=','').replace('http://youtu.be/','').replace('https://youtu.be/','').substr(0,11);
 	}
-<<<<<<< HEAD
-	
 
-=======
->>>>>>> b905b2fafba97683546d41219413f09327cad9b9
+/* ·
+   ·
+   ·   Youtube embed link from youtube url
+   ·
+   · · · · · · · · · · · · · */
+
+function youTubeEmbedLinkFromURL(url, autoplay) {
+	// get start time hash
+	var l = document.createElement("a");
+	l.href = url;
+
+	var addStart = '';
+	if(l.hash.substring(0,3) == '#t=') {
+		addStart = '&start=' + l.hash.substring(3);
+		}
+
+	var addAutoplay = '';
+	if(typeof autoplay != 'undefined' && autoplay === true) {
+		addAutoplay = '&autoplay=1';
+		}
+
+	return '//www.youtube.com/embed/' + youTubeIDFromYouTubeURL(url) + '?enablejsapi=1&version=3&playerapiid=ytplayer' + addStart + addAutoplay;
+	}
+
+/* ·
+   ·
+   ·   Vimeo ID from Vimeo URL
+   ·
+   · · · · · · · · · · · · · */
+
+function vimeoIDFromVimeoURL(url) {
+	id = url.replace('http://vimeo.com/','').replace('https://vimeo.com/','');
+	if(id.indexOf('#') > -1) {
+		id = id.substring(0,id.indexOf('#'));
+		}
+	return id;
+	}
+
+/* ·
+   ·
+   ·   Vimeo embed link from vimeo url
+   ·
+   · · · · · · · · · · · · · */
+
+function vimeoEmbedLinkFromURL(url, autoplay) {
+	// get start time hash
+	var l = document.createElement("a");
+	l.href = url;
+
+	var addStart = '';
+	if(l.hash.substring(0,3) == '#t=') {
+		addStart = l.hash;
+		}
+
+	var addAutoplay = '&autoplay=0';
+	if(typeof autoplay != 'undefined' && autoplay === true) {
+		addAutoplay = '&autoplay=1';
+		}
+
+	return 'https://player.vimeo.com/video/' + vimeoIDFromVimeoURL(url) + '?api=1' + addAutoplay + addStart;
+	}
+
+
+/* ·
+   ·
+   ·   CSS class name from URL
+   ·
+   · · · · · · · · · · · · · */
+
+function CSSclassNameByHostFromURL(url) {
+	var host = getHost(url);
+	if(host.indexOf('www.') === 0) {
+		host = host.substring(4);
+		}
+	host = host.toLowerCase().replace(/\./g, "-");
+	host = host.replace(/[^a-zA-Z0-9-]+/g, "_");
+
+	if(host == 'youtu-be') {
+		host = 'youtube-com';
+		}
+
+	return 'host-' + host;
+	}
+
+
+
+/* ·
+   ·
+   ·   String similarity
+   ·
+   ·   @params string1, string2:
+   ·   @returns (int) percent similarity
+   ·
+   · · · · · · · · · · · · · */
+
+function stringSimilarity(string1, string2) {
+
+	if(typeof string1 != 'string' || typeof string2 != 'string') {
+		return 0;
+		}
+
+	// trim and strip html tags
+	string1 = $('<div/>').html($.trim(string1)).text();
+	string2 = $('<div/>').html($.trim(string2)).text();
+
+	var longestStringLength = string1.length;
+	if(string2.length>string1.length) {
+		longestStringLength = string2.length;
+	}
+
+	var distanceArray = levenshteinenator(string1, string2);
+	var distance = distanceArray[distanceArray.length-1][distanceArray[distanceArray.length-1].length-1];
+
+	var percentSimilarity = 100-Math.round(distance/longestStringLength*100);
+
+	return percentSimilarity;
+	}
+
+// from http://andrew.hedges.name/experiments/levenshtein/
+var levenshteinenator = (function () {
+
+	/**
+	 * @param String a
+	 * @param String b
+	 * @return Array
+	 */
+	function levenshteinenator(a, b) {
+		var cost;
+		var m = a.length;
+		var n = b.length;
+
+		// make sure a.length >= b.length to use O(min(n,m)) space, whatever that is
+		if (m < n) {
+			var c = a; a = b; b = c;
+			var o = m; m = n; n = o;
+		}
+
+		var r = []; r[0] = [];
+		for (var c = 0; c < n + 1; ++c) {
+			r[0][c] = c;
+		}
+
+		for (var i = 1; i < m + 1; ++i) {
+			r[i] = []; r[i][0] = i;
+			for ( var j = 1; j < n + 1; ++j ) {
+				cost = a.charAt( i - 1 ) === b.charAt( j - 1 ) ? 0 : 1;
+				r[i][j] = minimator( r[i-1][j] + 1, r[i][j-1] + 1, r[i-1][j-1] + cost );
+			}
+		}
+
+		return r;
+	}
+
+
+	/**
+	 * Return the smallest of the three numbers passed in
+	 * @param Number x
+	 * @param Number y
+	 * @param Number z
+	 * @return Number
+	 */
+	function minimator(x, y, z) {
+		if (x <= y && x <= z) return x;
+		if (y <= x && y <= z) return y;
+		return z;
+	}
+
+	return levenshteinenator;
+
+}());
+
